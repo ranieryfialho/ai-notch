@@ -42,7 +42,9 @@ Os instaladores não são assinados digitalmente. Na primeira execução, o Wind
 Em **Configurações → Minhas IAs**:
 
 - **Claude Code**: rode `claude setup-token` e cole o token (`sk-ant-oat01-...`). O uso vem dos headers `anthropic-ratelimit-unified-5h/7d` de uma chamada de 1 token.
-- **Google Antigravity**: clique em **Entrar com Google**. O app faz o login OAuth no navegador sozinho, sem o script de pareamento que o Status Monitor precisa. A cota é por modelo, e o app mostra o modelo mais perto do limite.
+- **Google Antigravity**: na primeira vez, cole o **Client ID** e o **Client Secret** de um cliente OAuth do Google seu. O app mostra o passo a passo: Google Cloud Console → tela de permissão OAuth (Externo, com seu e-mail como usuário de teste) → Credenciais → ID do cliente OAuth do tipo **App para computador**. Quem já usa o Status Monitor pode colar as mesmas credenciais de lá. Depois é só clicar em **Entrar com Google**: o app faz o login OAuth no navegador sozinho, sem o script de pareamento do Status Monitor. A cota é por modelo, e o app mostra o modelo mais perto do limite.
+
+O AI Notch não traz nenhuma credencial do Google embutida, nem no código nem no instalador.
 
 Os tokens ficam no cofre do sistema (Gerenciador de Credenciais do Windows, Keychain do macOS ou Secret Service/GNOME Keyring no Linux). Para adicionar outra IA, crie `src-tauri/src/ia/<nome>.rs` seguindo `claude.rs` e registre o provider em `ia/mod.rs`.
 

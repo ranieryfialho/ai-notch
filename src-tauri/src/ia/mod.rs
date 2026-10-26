@@ -159,22 +159,22 @@ pub async fn ia_uso(app: AppHandle, id: String) -> Result<Vec<JanelaUso>, String
         ler_contas(&app)?.into_iter().find(|c| c.id == id).ok_or("Conta não encontrada")?
     };
     let token = cofre::ler(&app, &conta.id)?;
-    buscar_uso(&conta.provedor, &token).await
+    buscar_uso(&app, &conta.provedor, &token).await
 }
 
 /// Testa um token antes de salvar, para a tela de configuração avisar na hora.
 #[tauri::command]
-pub async fn ia_testar_token(provedor: String, token: String) -> Result<Vec<JanelaUso>, String> {
+pub async fn ia_testar_token(app: AppHandle, provedor: String, token: String) -> Result<Vec<JanelaUso>, String> {
     let token = token.trim();
     validar_token(&provedor, token)?;
-    buscar_uso(&provedor, token).await
+    buscar_uso(&app, &provedor, token).await
 }
 
-async fn buscar_uso(provedor: &str, token: &str) -> Result<Vec<JanelaUso>, String> {
+async fn buscar_uso(app: &AppHandle, provedor: &str, token: &str) -> Result<Vec<JanelaUso>, String> {
     let cliente = reqwest::Client::new();
     match provedor {
         claude::ID => claude::uso(&cliente, token).await,
-        antigravity::ID => antigravity::uso(&cliente, token).await,
+        antigravity::ID => antigravity::uso(&cliente, &antigravity::cliente_oauth(app)?, token).await,
         outro => Err(format!("IA desconhecida: {outro}")),
     }
 }
@@ -183,4 +183,20 @@ async fn buscar_uso(provedor: &str, token: &str) -> Result<Vec<JanelaUso>, Strin
 pub async fn ia_login_antigravity(app: AppHandle, rotulo: String, plano_usd_mensal: Option<f64>) -> Result<Conta, String> {
     let refresh_token = antigravity::login_pelo_navegador(&app).await?;
     salvar(&app, antigravity::ID, &rotulo, &refresh_token, plano_usd_mensal)
+}
+
+/// Client ID configurado para o Antigravity (não é segredo; o secret nunca volta para a tela).
+#[tauri::command]
+pub async fn ia_antigravity_cliente(app: AppHandle) -> Option<String> {
+    antigravity::cliente_oauth(&app).ok().map(|c| c.client_id)
+}
+
+#[tauri::command]
+pub async fn ia_antigravity_salvar_cliente(app: AppHandle, client_id: String, client_secret: String) -> Result<(), String> {
+    antigravity::salvar_cliente_oauth(&app, &client_id, &client_secret)
+}
+
+#[tauri::command]
+pub async fn ia_antigravity_remover_cliente(app: AppHandle) -> Result<(), String> {
+    antigravity::remover_cliente_oauth(&app)
 }

@@ -8,6 +8,7 @@ import { useConfig, type Config } from '../lib/config'
 import { corUso, duracaoCurta } from '../lib/formato'
 import { Mascote } from '../notch/Mascote'
 import { EVENTO_CONTAS_IA } from '../notch/useUsoIA'
+import { clienteIdCurto, ConfigurarClienteGoogle, useClienteGoogle } from './ClienteGoogle'
 import { ComoUsar, DicaEspiada } from './ComoUsar'
 
 type Secao = 'geral' | 'como-usar' | 'ias' | 'foco' | 'agua' | 'avisos' | 'sobre'
@@ -136,6 +137,8 @@ function MinhasIAs({ config, atualizar }: PropsSecao) {
   const [provedores, setProvedores] = useState<ProvedorIA[]>([])
   const [contas, setContas] = useState<ContaIA[]>([])
   const [adicionando, setAdicionando] = useState(false)
+  // Muda quando as credenciais do Google mudam: refaz a consulta de cada conta.
+  const [versao, setVersao] = useState(0)
 
   const recarregar = () => api.iaContas().then(setContas).catch(() => setContas([]))
   const avisarNotch = () => void emit(EVENTO_CONTAS_IA)
@@ -162,7 +165,7 @@ function MinhasIAs({ config, atualizar }: PropsSecao) {
           </Cartao>
         )}
         {contas.map((c) => (
-          <LinhaConta key={c.id} conta={c} provedor={provedores.find((p) => p.id === c.provedor)} remover={() => void remover(c)} />
+          <LinhaConta key={`${c.id}-${versao}`} conta={c} provedor={provedores.find((p) => p.id === c.provedor)} remover={() => void remover(c)} />
         ))}
       </div>
 
@@ -186,6 +189,14 @@ function MinhasIAs({ config, atualizar }: PropsSecao) {
         </button>
       )}
 
+      <CartaoClienteGoogle
+        temContaAntigravity={contas.some((c) => c.provedor === 'antigravity')}
+        mudou={() => {
+          setVersao((v) => v + 1)
+          avisarNotch()
+        }}
+      />
+
       <Cartao className="mt-8">
         <Campo rotulo="Atualizar a cada" descricao="Cada consulta do Claude é uma chamada real (1 token) à API.">
           <Numero valor={config.ia.intervaloMin} min={1} max={120} sufixo="min" onChange={(v) => atualizar((c) => ({ ...c, ia: { ...c.ia, intervaloMin: v } }))} />
@@ -198,6 +209,64 @@ function MinhasIAs({ config, atualizar }: PropsSecao) {
         Os tokens ficam no cofre de senhas do sistema (Gerenciador de Credenciais, Keychain ou GNOME Keyring), nunca em texto puro na configuração.
       </p>
     </Pagina>
+  )
+}
+
+/** Status das credenciais do Google (Antigravity), com trocar e remover. */
+function CartaoClienteGoogle({ temContaAntigravity, mudou }: { temContaAntigravity: boolean; mudou: () => void }) {
+  const { clienteId, recarregar } = useClienteGoogle()
+  const [editando, setEditando] = useState(false)
+
+  if (clienteId === undefined) return null
+  // Sem conta do Antigravity e sem credenciais: nada a mostrar aqui.
+  if (!clienteId && !temContaAntigravity && !editando) return null
+
+  const remover = async () => {
+    if (!confirm('Remover as credenciais do Google? As contas do Antigravity param de atualizar até você configurar de novo.')) return
+    await api.iaAntigravityRemoverCliente()
+    await recarregar()
+    mudou()
+  }
+
+  return (
+    <div className="mt-6">
+      <p className="mb-2 text-xs font-medium tracking-wide text-zinc-500 uppercase">Credenciais do Google (Antigravity)</p>
+      {editando ? (
+        <ConfigurarClienteGoogle
+          cancelar={() => setEditando(false)}
+          aoSalvar={async () => {
+            setEditando(false)
+            await recarregar()
+            mudou()
+          }}
+        />
+      ) : (
+        <Cartao className={clienteId ? '' : 'border-amber-500/30'}>
+          <div className="flex items-center gap-3 py-3">
+            <div className="flex-1 text-sm">
+              {clienteId ? (
+                <p className="flex items-center gap-1.5 text-zinc-200">
+                  <Check size={14} className="text-green-400" /> Configuradas <span className="text-xs text-zinc-500">({clienteIdCurto(clienteId)})</span>
+                </p>
+              ) : (
+                <>
+                  <p className="text-amber-200">Faltam as credenciais do Google</p>
+                  <p className="text-xs text-zinc-500">Sem elas, as contas do Antigravity não atualizam.</p>
+                </>
+              )}
+            </div>
+            <button type="button" onClick={() => setEditando(true)} className="rounded-lg bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10">
+              {clienteId ? 'Trocar' : 'Configurar'}
+            </button>
+            {clienteId && (
+              <button type="button" onClick={() => void remover()} className="rounded-lg px-3 py-1.5 text-xs text-zinc-500 hover:bg-white/5 hover:text-red-400">
+                Remover
+              </button>
+            )}
+          </div>
+        </Cartao>
+      )}
+    </div>
   )
 }
 
@@ -253,6 +322,7 @@ function NovaConta({ provedores, cancelar, salvo }: { provedores: ProvedorIA[]; 
   const [token, setToken] = useState('')
   const [estado, setEstado] = useState<{ tipo: 'ocioso' | 'ocupado' | 'login' } | { tipo: 'erro'; msg: string }>({ tipo: 'ocioso' })
   const [manual, setManual] = useState(false)
+  const { clienteId, recarregar: recarregarCliente } = useClienteGoogle()
 
   const provedor = provedores.find((p) => p.id === provedorId)
   const planoNum = plano.trim() ? Number(plano.replace(',', '.')) : null
@@ -280,7 +350,9 @@ function NovaConta({ provedores, cancelar, salvo }: { provedores: ProvedorIA[]; 
   }
 
   if (!provedor) return null
-  const mostrarCampoToken = !provedor.loginNavegador || manual
+  // Antigravity sem credenciais do Google: primeiro o passo a passo delas.
+  const precisaCliente = provedor.loginNavegador && clienteId === null
+  const mostrarCampoToken = !precisaCliente && (!provedor.loginNavegador || manual)
 
   return (
     <Cartao className="mt-4 border-violet-500/30">
@@ -315,9 +387,17 @@ function NovaConta({ provedores, cancelar, salvo }: { provedores: ProvedorIA[]; 
           </label>
         </div>
 
-        <p className="text-xs text-zinc-400">{provedor.ajuda}</p>
+        {precisaCliente && <ConfigurarClienteGoogle aoSalvar={() => void recarregarCliente()} />}
 
-        {provedor.loginNavegador && !manual && (
+        {!precisaCliente && <p className="text-xs text-zinc-400">{provedor.ajuda}</p>}
+
+        {provedor.loginNavegador && clienteId && (
+          <p className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <Check size={12} className="text-green-400" /> Credenciais do Google configuradas ({clienteIdCurto(clienteId)})
+          </p>
+        )}
+
+        {provedor.loginNavegador && !precisaCliente && !manual && (
           <div className="flex items-center gap-3">
             <button
               type="button"

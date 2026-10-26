@@ -2,36 +2,51 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::RngCore;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use super::{JanelaUso, ProvedorInfo};
+use super::{cofre, JanelaUso, ProvedorInfo};
 
 pub const ID: &str = "antigravity";
 
-// Mesmo client público embarcado no app oficial do Antigravity (o mesmo do
-// Status Monitor). É um client OAuth de "installed app": o client_secret é só
-// um identificador, como o próprio Google documenta para esse tipo de cliente.
-// Mesmo assim não fica no código-fonte (o repositório é público): entra na
-// compilação via `src-tauri/.segredos.env` (local) ou secrets do GitHub Actions.
-const CLIENT_ID: &str = match option_env!("ANTIGRAVITY_CLIENT_ID") {
-    Some(v) => v,
-    None => "",
-};
-const CLIENT_SECRET: &str = match option_env!("ANTIGRAVITY_CLIENT_SECRET") {
-    Some(v) => v,
-    None => "",
-};
+/// O AI Notch não traz credenciais do Google embutidas: cada usuário cria o
+/// próprio cliente OAuth (tipo "App para computador") e cola o Client ID e o
+/// Client Secret em Minhas IAs. Eles ficam no cofre do sistema.
+const CHAVE_COFRE_CLIENTE: &str = "antigravity-cliente-oauth";
 
-fn exigir_credenciais() -> Result<(), String> {
-    if CLIENT_ID.is_empty() || CLIENT_SECRET.is_empty() {
-        return Err("Esta versão foi compilada sem as credenciais do Antigravity (ANTIGRAVITY_CLIENT_ID/SECRET).".into());
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClienteOAuth {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+const SEM_CLIENTE: &str = "Configure o Client ID e o Client Secret do Google em Minhas IAs → Google Antigravity antes de conectar.";
+
+pub fn cliente_oauth(app: &AppHandle) -> Result<ClienteOAuth, String> {
+    let json = cofre::ler(app, CHAVE_COFRE_CLIENTE).map_err(|_| SEM_CLIENTE.to_string())?;
+    serde_json::from_str(&json).map_err(|_| SEM_CLIENTE.to_string())
+}
+
+pub fn salvar_cliente_oauth(app: &AppHandle, client_id: &str, client_secret: &str) -> Result<(), String> {
+    let client_id = client_id.trim();
+    let client_secret = client_secret.trim();
+    let visivel = |t: &str| !t.is_empty() && t.bytes().all(|b| (0x21..=0x7e).contains(&b));
+    if !visivel(client_id) || !client_id.ends_with(".apps.googleusercontent.com") {
+        return Err("Client ID inválido: ele termina com \".apps.googleusercontent.com\".".into());
     }
-    Ok(())
+    if !visivel(client_secret) {
+        return Err("Client Secret inválido: copie de novo do Google Cloud, sem espaços.".into());
+    }
+    let cliente = ClienteOAuth { client_id: client_id.into(), client_secret: client_secret.into() };
+    cofre::salvar(app, CHAVE_COFRE_CLIENTE, &serde_json::to_string(&cliente).map_err(|e| e.to_string())?)
+}
+
+pub fn remover_cliente_oauth(app: &AppHandle) -> Result<(), String> {
+    cofre::remover(app, CHAVE_COFRE_CLIENTE)
 }
 
 const PORTA_CALLBACK: u16 = 51121;
@@ -39,12 +54,12 @@ const URL_AUTORIZACAO: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const URL_TOKEN: &str = "https://oauth2.googleapis.com/token";
 const URL_LOAD_CODE_ASSIST: &str = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
 const URL_MODELOS: &str = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
-const ESCOPOS: [&str; 5] = [
+// Só escopos comuns: um cliente OAuth criado pelo usuário não pode pedir os
+// escopos internos que o app oficial usa (cclog, experimentsandconfigs).
+const ESCOPOS: [&str; 3] = [
     "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/cclog",
-    "https://www.googleapis.com/auth/experimentsandconfigs",
 ];
 
 pub const INFO: ProvedorInfo = ProvedorInfo {
@@ -56,7 +71,7 @@ pub const INFO: ProvedorInfo = ProvedorInfo {
     passos: &[
         "Clique em \"Entrar com Google\"",
         "Faça login com a conta Google usada nas cotas do Antigravity",
-        "Autorize o acesso e volte para o app — a conta aparece na lista",
+        "Autorize o acesso e volte para o app: a conta aparece na lista",
     ],
     login_navegador: true,
 };
@@ -74,13 +89,12 @@ struct RespostaToken {
     refresh_token: Option<String>,
 }
 
-async fn renovar_access_token(cliente: &reqwest::Client, refresh_token: &str) -> Result<String, String> {
-    exigir_credenciais()?;
+async fn renovar_access_token(cliente: &reqwest::Client, oauth: &ClienteOAuth, refresh_token: &str) -> Result<String, String> {
     let resposta = cliente
         .post(URL_TOKEN)
         .form(&[
-            ("client_id", CLIENT_ID),
-            ("client_secret", CLIENT_SECRET),
+            ("client_id", oauth.client_id.as_str()),
+            ("client_secret", oauth.client_secret.as_str()),
             ("refresh_token", refresh_token),
             ("grant_type", "refresh_token"),
         ])
@@ -116,8 +130,8 @@ async fn post_json(cliente: &reqwest::Client, url: &str, access_token: &str, cor
 /// por modelo (`remainingFraction`). O modelo mais perto do limite vira o
 /// "pior caso" da única janela que a API oferece. Sem janela semanal real,
 /// uma segunda entrada seria dado inventado.
-pub async fn uso(cliente: &reqwest::Client, refresh_token: &str) -> Result<Vec<JanelaUso>, String> {
-    let access_token = renovar_access_token(cliente, refresh_token).await?;
+pub async fn uso(cliente: &reqwest::Client, oauth: &ClienteOAuth, refresh_token: &str) -> Result<Vec<JanelaUso>, String> {
+    let access_token = renovar_access_token(cliente, oauth, refresh_token).await?;
 
     let assist = post_json(cliente, URL_LOAD_CODE_ASSIST, &access_token, serde_json::json!({ "metadata": { "ideType": "ANTIGRAVITY" } })).await?;
     let projeto = match &assist["cloudaicompanionProject"] {
@@ -154,7 +168,7 @@ fn aleatorio_base64(bytes: usize) -> String {
 /// Status Monitor isso exigia um script à parte + pareamento; aqui o app
 /// desktop faz o fluxo inteiro sozinho.
 pub async fn login_pelo_navegador(app: &AppHandle) -> Result<String, String> {
-    exigir_credenciais()?;
+    let oauth = cliente_oauth(app)?;
     let redirect = format!("http://localhost:{PORTA_CALLBACK}/oauth-callback");
     let verificador = aleatorio_base64(32);
     let desafio = URL_SAFE_NO_PAD.encode(Sha256::digest(verificador.as_bytes()));
@@ -162,7 +176,7 @@ pub async fn login_pelo_navegador(app: &AppHandle) -> Result<String, String> {
 
     let mut url = url::Url::parse(URL_AUTORIZACAO).unwrap();
     url.query_pairs_mut()
-        .append_pair("client_id", CLIENT_ID)
+        .append_pair("client_id", &oauth.client_id)
         .append_pair("redirect_uri", &redirect)
         .append_pair("response_type", "code")
         .append_pair("scope", &ESCOPOS.join(" "))
@@ -201,8 +215,8 @@ pub async fn login_pelo_navegador(app: &AppHandle) -> Result<String, String> {
     let resposta = reqwest::Client::new()
         .post(URL_TOKEN)
         .form(&[
-            ("client_id", CLIENT_ID),
-            ("client_secret", CLIENT_SECRET),
+            ("client_id", oauth.client_id.as_str()),
+            ("client_secret", oauth.client_secret.as_str()),
             ("code", codigo.as_str()),
             ("code_verifier", verificador.as_str()),
             ("grant_type", "authorization_code"),

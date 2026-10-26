@@ -59,6 +59,9 @@ pub fn run() {
             ia::ia_uso,
             ia::ia_testar_token,
             ia::ia_login_antigravity,
+            ia::ia_antigravity_cliente,
+            ia::ia_antigravity_salvar_cliente,
+            ia::ia_antigravity_remover_cliente,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o AI Notch");

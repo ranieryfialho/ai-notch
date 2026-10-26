@@ -56,6 +56,10 @@ export const api = {
   iaTestarToken: (provedor: string, token: string) => invoke<JanelaUso[]>('ia_testar_token', { provedor, token }),
   iaLoginAntigravity: (rotulo: string, planoUsdMensal: number | null) =>
     invoke<ContaIA>('ia_login_antigravity', { rotulo, planoUsdMensal }),
+  iaAntigravityCliente: () => invoke<string | null>('ia_antigravity_cliente'),
+  iaAntigravitySalvarCliente: (clientId: string, clientSecret: string) =>
+    invoke<void>('ia_antigravity_salvar_cliente', { clientId, clientSecret }),
+  iaAntigravityRemoverCliente: () => invoke<void>('ia_antigravity_remover_cliente'),
 }
 
 /** Erros dos comandos chegam como string; garante uma mensagem legível. */
