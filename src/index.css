@@ -1,0 +1,146 @@
+@import 'tailwindcss';
+
+:root {
+  font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, Cantarell, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+html,
+body,
+#raiz {
+  margin: 0;
+  height: 100%;
+}
+
+/* A janela do notch é transparente: só o desenho preto aparece. */
+body.janela-notch {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+body.janela-config {
+  background: #09090b;
+}
+
+/* Cantos côncavos no topo: o notch "escorre" da borda da tela. */
+.orelha {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+.orelha-esq {
+  background: radial-gradient(circle at 0% 100%, transparent 9.5px, #000 10px);
+}
+.orelha-dir {
+  background: radial-gradient(circle at 100% 100%, transparent 9.5px, #000 10px);
+}
+
+.equalizador {
+  height: 100%;
+  animation: equalizar 0.9s ease-in-out infinite alternate;
+  transform-origin: bottom;
+}
+
+@keyframes equalizar {
+  0% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0.45);
+  }
+}
+
+.mascote-flutua {
+  animation: flutuar 3.2s ease-in-out infinite;
+}
+
+.mascote-balanco {
+  animation: balancar 0.8s ease-in-out infinite alternate;
+}
+
+.mascote-olhos {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: piscar 4.5s infinite;
+}
+
+.mascote-andando .mascote-pe-esq,
+.mascote-andando .mascote-pe-dir {
+  animation: passo 0.34s ease-in-out infinite alternate;
+}
+.mascote-andando .mascote-pe-dir {
+  animation-delay: -0.17s;
+}
+
+@keyframes passo {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(1.8px);
+  }
+}
+
+.mascote-zz {
+  animation: flutuar 2s ease-in-out infinite;
+}
+
+@keyframes flutuar {
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+@keyframes balancar {
+  from {
+    transform: rotate(-8deg);
+  }
+  to {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes piscar {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+.agua-onda {
+  border-top-left-radius: 40% 8px;
+  border-top-right-radius: 40% 8px;
+}
+
+.entrada {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(9 9 11);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.875rem;
+  color: white;
+  outline: none;
+}
+
+.entrada:focus {
+  border-color: rgb(167 139 250);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 99px;
+}

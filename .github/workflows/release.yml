@@ -1,0 +1,62 @@
+# Gera os instaladores de todas as plataformas e publica o release com eles.
+# Dispara ao criar uma tag v* (ex.: git tag v0.1.0 && git push --tags) ou manualmente.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - plataforma: windows-latest
+            args: ''
+          - plataforma: macos-latest
+            args: '--target universal-apple-darwin'
+          # 22.04 = glibc mais antiga → .deb/.rpm/AppImage rodam em mais distros.
+          - plataforma: ubuntu-22.04
+            args: ''
+    runs-on: ${{ matrix.plataforma }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências do Linux
+        if: matrix.plataforma == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config rpm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.plataforma == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Client OAuth do Antigravity: fora do código, entra na compilação.
+          ANTIGRAVITY_CLIENT_ID: ${{ secrets.ANTIGRAVITY_CLIENT_ID }}
+          ANTIGRAVITY_CLIENT_SECRET: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: 'AI Notch v__VERSION__'
+          releaseBody: 'Baixe o instalador da sua plataforma nos arquivos abaixo.'
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

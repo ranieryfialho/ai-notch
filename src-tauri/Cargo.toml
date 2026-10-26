@@ -1,0 +1,49 @@
+[package]
+name = "ai-notch"
+version = "0.1.0"
+description = "Um notch vivo para Windows, macOS e Linux"
+authors = ["Raniery Fialho"]
+edition = "2021"
+
+[lib]
+name = "ai_notch_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-store = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-drag = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+url = "2"
+starship-battery = "0.12"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+tokio = { version = "1", features = ["time", "net", "io-util", "macros", "rt-multi-thread"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[target."cfg(windows)".dependencies]
+windows = { version = "0.58", features = ["Media_Control", "Foundation", "Foundation_Collections", "Storage_Streams", "Win32_UI_Input_KeyboardAndMouse"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+mpris = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5"
