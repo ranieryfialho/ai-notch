@@ -1,10 +1,11 @@
+import { getVersion } from '@tauri-apps/api/app'
 import { emit, listen } from '@tauri-apps/api/event'
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { Bell, BookOpen, Check, Droplet, Info, Loader2, LogIn, Monitor, Plus, Sparkles, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, mensagemDeErro, type ContaIA, type JanelaUso, type ProvedorIA } from '../lib/api'
-import { useConfig, type Config } from '../lib/config'
+import { PAGINAS_NOTCH, useConfig, type Config, type PaginaNotch } from '../lib/config'
 import { corUso, duracaoCurta } from '../lib/formato'
 import { Mascote } from '../notch/Mascote'
 import { EVENTO_CONTAS_IA } from '../notch/useUsoIA'
@@ -121,6 +122,8 @@ function Geral({ config, atualizar, verGuia }: PropsSecao & { verGuia: () => voi
           onChange={(v) => atualizar((c) => ({ ...c, letras: v }))}
         />
       </Cartao>
+      <PaginasDoNotch config={config} atualizar={atualizar} />
+
       <p className="mt-4 text-xs text-zinc-500">
         Dica: passe o mouse no notch para abrir; no canto direito, abre só a espiada das IAs.{' '}
         <button type="button" onClick={verGuia} className="text-violet-300 hover:underline">
@@ -128,6 +131,28 @@ function Geral({ config, atualizar, verGuia }: PropsSecao & { verGuia: () => voi
         </button>
       </p>
     </Pagina>
+  )
+}
+
+/** Liga/desliga cada página do carrossel do notch aberto. */
+function PaginasDoNotch({ config, atualizar }: PropsSecao) {
+  const ligadas = PAGINAS_NOTCH.filter((p) => config.paginas[p.id]).length
+  const alternar = (id: PaginaNotch, v: boolean) => {
+    // Pelo menos uma página fica ligada, senão o notch abriria vazio.
+    if (!v && ligadas <= 1) return
+    atualizar((c) => ({ ...c, paginas: { ...c.paginas, [id]: v } }))
+  }
+  return (
+    <div className="mt-8">
+      <h2 className="text-sm font-semibold text-white">Páginas do notch</h2>
+      <p className="mt-0.5 mb-3 text-xs text-zinc-500">Escolha o que aparece ao abrir o notch. Página desmarcada some das setas e dos pontinhos.</p>
+      <Cartao>
+        {PAGINAS_NOTCH.map((p) => (
+          <Interruptor key={p.id} rotulo={p.rotulo} descricao={p.descricao} valor={config.paginas[p.id]} onChange={(v) => alternar(p.id, v)} />
+        ))}
+      </Cartao>
+      {ligadas <= 1 && <p className="mt-2 text-xs text-amber-300/80">Pelo menos uma página precisa ficar ligada.</p>}
+    </div>
   )
 }
 
@@ -536,6 +561,12 @@ function AvisosCfg({ config, atualizar }: PropsSecao) {
 }
 
 function Sobre() {
+  // Vem do tauri.conf.json: não precisa lembrar de atualizar aqui a cada versão.
+  const [versao, setVersao] = useState('')
+  useEffect(() => {
+    getVersion().then(setVersao).catch(() => {})
+  }, [])
+
   return (
     <Pagina titulo="Sobre">
       <Cartao>
@@ -543,7 +574,7 @@ function Sobre() {
           <Mascote tamanho={56} humor="feliz" />
           <div>
             <p className="text-lg font-semibold text-white">AI Notch</p>
-            <p className="text-sm text-zinc-400">Versão 0.1.0 · Windows, macOS e Linux</p>
+            <p className="text-sm text-zinc-400">{versao && `Versão ${versao} · `}Windows, macOS e Linux</p>
           </div>
         </div>
         <p className="mt-4 text-sm text-zinc-400">Música com letra sincronizada, foco, água, tarefas, prateleira de arquivos e o uso das suas IAs, num notch no topo da tela.</p>

@@ -30,9 +30,9 @@ export function ComoUsar() {
       <Topico icone={<PanelTop size={16} />} titulo="O que aparece no notch recolhido">
         <Tabela
           linhas={[
-            ['Nada tocando', 'Energia à esquerda, uso da IA no centro, hora à direita.'],
+            ['Nada tocando', 'Energia (ou o Faísca, se ligado em Geral) à esquerda e hora à direita. O uso da IA aparece no centro por 4 s a cada 20 s.'],
             ['Música tocando', 'Capa à esquerda, equalizador à direita. O centro reveza a cada 4 s entre hora, linha do tempo da música e uso da IA.'],
-            ['Música pausada', 'O Faísca passeia pelo centro (anda até um canto, pisca, salta, faz pirueta, com 60 s de pausa entre cada passo), alternando com o uso da IA.'],
+            ['Música pausada', 'Energia à esquerda e o Faísca passeando pelo centro (anda até um canto, pisca, salta, faz pirueta, com 60 s de pausa entre cada passo), alternando com o uso da IA.'],
             ['Pomodoro rodando', 'A contagem regressiva aparece à direita, na cor do modo (foco, pausa curta, pausa longa).'],
           ]}
         />
@@ -49,6 +49,9 @@ export function ComoUsar() {
           Use as <b>setas</b> nas laterais, clique nos <b>pontinhos</b> embaixo, ou role para os lados (trackpad, ou <b>Shift + roda</b> do mouse).
         </Item>
         <Item>Páginas: Música, Pomodoro, Lembrete de Água, Prateleira, Lista de Tarefas e Minhas IAs. A engrenagem no canto abre estas configurações.</Item>
+        <Item>
+          Não usa alguma? Desligue em <b>Geral → Páginas do notch</b> e ela some do carrossel.
+        </Item>
       </Topico>
 
       <Topico icone={<Music2 size={16} />} titulo="Música">

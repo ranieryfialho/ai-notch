@@ -2,7 +2,21 @@ import { emit, listen } from '@tauri-apps/api/event'
 import { LazyStore } from '@tauri-apps/plugin-store'
 import { useEffect, useState } from 'react'
 
+/** As páginas do notch aberto, na ordem do carrossel. */
+export const PAGINAS_NOTCH = [
+  { id: 'musica', rotulo: 'Música', descricao: 'O que está tocando, controles e letra sincronizada.' },
+  { id: 'foco', rotulo: 'Pomodoro', descricao: 'Timer de foco com pausas curtas e longas.' },
+  { id: 'agua', rotulo: 'Lembrete de Água', descricao: 'Meta diária e lembretes para beber água.' },
+  { id: 'prateleira', rotulo: 'Prateleira', descricao: 'Arraste arquivos para o notch e depois para fora.' },
+  { id: 'tarefas', rotulo: 'Lista de Tarefas', descricao: 'Tarefas rápidas e as concluídas do dia.' },
+  { id: 'ias', rotulo: 'Minhas IAs', descricao: 'Uso das suas contas de IA, conta por conta.' },
+] as const
+
+export type PaginaNotch = (typeof PAGINAS_NOTCH)[number]['id']
+
 export type Config = {
+  /** Quais páginas aparecem no carrossel do notch aberto. */
+  paginas: Record<PaginaNotch, boolean>
   notchMinimo: boolean
   mascote: boolean
   letras: boolean
@@ -20,6 +34,7 @@ export type Config = {
 }
 
 export const CONFIG_PADRAO: Config = {
+  paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true },
   notchMinimo: false,
   mascote: false,
   letras: true,
@@ -38,6 +53,7 @@ function mesclar(salva: Partial<Config> | undefined): Config {
   return {
     ...CONFIG_PADRAO,
     ...c,
+    paginas: { ...CONFIG_PADRAO.paginas, ...c.paginas },
     avisos: { ...CONFIG_PADRAO.avisos, ...c.avisos },
     foco: { ...CONFIG_PADRAO.foco, ...c.foco },
     agua: { ...CONFIG_PADRAO.agua, ...c.agua },

@@ -1,6 +1,6 @@
 [package]
 name = "ai-notch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Um notch vivo para Windows, macOS e Linux"
 authors = ["Raniery Fialho"]
 edition = "2021"

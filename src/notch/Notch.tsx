@@ -4,7 +4,7 @@ import { ArrowBigUp, BatteryCharging, BatteryFull, BatteryLow, Droplet, Music2, 
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
-import { usePersistido, useConfig } from '../lib/config'
+import { usePersistido, useConfig, type PaginaNotch } from '../lib/config'
 import { corUso, duracaoCompacta, mmss } from '../lib/formato'
 import { Agua } from './abas/Agua'
 import { COR_MODO, Foco } from './abas/Foco'
@@ -22,7 +22,7 @@ import { posicaoAgora, useMidia, useTique } from './useMidia'
 import { ROTULO_MODO, usePomodoro } from './usePomodoro'
 import { piorUso, useUsoIA, type UsoConta } from './useUsoIA'
 
-type Pagina = 'musica' | 'foco' | 'agua' | 'prateleira' | 'tarefas' | 'ias'
+type Pagina = PaginaNotch
 
 const PAGINAS: { id: Pagina; titulo: [string, string?, string?] }[] = [
   { id: 'musica', titulo: [''] },
@@ -60,18 +60,28 @@ export function Notch() {
   const [aberto, setAberto] = useState(false)
   const [espiada, setEspiada] = useState(false)
   const zonaHover = useRef<'geral' | 'ia' | null>(null)
-  const [[indice, direcao], setPagina] = useState<[number, number]>([0, 0])
+  // Guarda a página pelo id: ligar/desligar abas nas configurações muda as posições.
+  const [[paginaId, direcao], setPagina] = useState<[Pagina, number]>(['musica', 0])
   const [arrastando, setArrastando] = useState(false)
   const { aviso, avisar, dispensar } = useAvisos()
   const timerHover = useRef<ReturnType<typeof setTimeout>>(undefined)
   const ultimaRolagem = useRef(0)
   useTique(10_000)
 
-  const pagina = PAGINAS[indice]
+  // Só as páginas ligadas em Configurações → Geral entram no carrossel.
+  const ligadas = PAGINAS.filter((p) => config.paginas[p.id])
+  const visiveis = ligadas.length > 0 ? ligadas : PAGINAS
+  // A página atual foi desligada: cai na primeira visível.
+  const indice = Math.max(0, visiveis.findIndex((p) => p.id === paginaId))
+  const pagina = visiveis[indice]
   const irPara = (novo: number) => {
-    const n = (novo + PAGINAS.length) % PAGINAS.length
-    if (n !== indice) setPagina([n, novo > indice ? 1 : -1])
+    const n = (novo + visiveis.length) % visiveis.length
+    if (n !== indice) setPagina([visiveis[n].id, novo > indice ? 1 : -1])
   }
+  const visivel = (id: Pagina) => visiveis.some((p) => p.id === id)
+  // O efeito de arrastar arquivos é registrado uma vez; lê a config por aqui.
+  const prateleiraLigada = useRef(true)
+  prateleiraLigada.current = visivel('prateleira')
 
   // ---- Dados ---------------------------------------------------------------
   const { leitura, comando } = useMidia()
@@ -161,13 +171,15 @@ export function Notch() {
   // ---- Arrastar arquivos para a prateleira ---------------------------------
   useEffect(() => {
     const parar = getCurrentWebview().onDragDropEvent(({ payload }) => {
+      // Prateleira desligada: arrastar arquivos não abre o notch.
+      if (!prateleiraLigada.current) return
       if (payload.type === 'enter' || payload.type === 'over') {
         setArrastando(true)
         setAberto(true)
-        setPagina(([i]) => {
-          const alvo = PAGINAS.findIndex((p) => p.id === 'prateleira')
-          return i === alvo ? [i, 0] : [alvo, alvo > i ? 1 : -1]
-        })
+        setPagina(([atual]) => [
+          'prateleira',
+          PAGINAS.findIndex((p) => p.id === 'prateleira') > PAGINAS.findIndex((p) => p.id === atual) ? 1 : -1,
+        ])
       } else if (payload.type === 'drop') {
         setArrastando(false)
         setPrateleira((atual) => [...atual, ...payload.paths.filter((p) => !atual.includes(p))])
@@ -208,11 +220,10 @@ export function Notch() {
   }
   const clicar = () => {
     if (aberto) return
-    // Clicar na espiada abre o notch direto na página das IAs.
+    // Clicar na espiada abre o notch direto na página das IAs (se estiver ligada).
     if (espiada) {
       setEspiada(false)
-      const alvo = PAGINAS.findIndex((p) => p.id === 'ias')
-      setPagina([alvo, alvo > indice ? 1 : -1])
+      if (visivel('ias')) setPagina(['ias', visiveis.findIndex((p) => p.id === 'ias') > indice ? 1 : -1])
     }
     setAberto(true)
   }
@@ -237,9 +248,10 @@ export function Notch() {
             ? 'dormindo'
             : 'normal'
 
+  // Com a música pausada o Faísca passeia pelo centro; não pode estar também aqui.
   const ladoEsquerdo = midia?.tocando ? (
     <Capa src={midia.capa} />
-  ) : config.mascote ? (
+  ) : config.mascote && !midia ? (
     <Mascote humor={humor} tamanho={20} />
   ) : (
     <AnelBateria bateria={bateria ?? NA_TOMADA} />
@@ -256,12 +268,11 @@ export function Notch() {
   )
 
   // O uso da IA (conta mais perto do limite) entra no revezamento do centro.
-  const rotulosRepetidos = new Set(usos.map((u) => u.conta.rotulo)).size < usos.length
-  const nomeDoPior = pior && usos.length > 1 ? (rotulosRepetidos ? NOME_IA[pior.conta.provedor] ?? pior.conta.provedor : pior.conta.rotulo) : null
-  const chipIA = pior ? <ChipIA pct={pior.pct} resetaEm={pior.janela.resetaEm} rotulo={nomeDoPior} /> : null
+  // O detalhe por conta fica na espiada; aqui só o essencial, para caber.
+  const chipIA = pior ? <ChipIA pct={pior.pct} resetaEm={pior.janela.resetaEm} /> : null
 
   // Tocando: o meio reveza hora, linha do tempo e IA.
-  // Pausado: o Faísca, alternando com a IA. Sem player: só a IA.
+  // Pausado: o Faísca, alternando com a IA. Sem player: a IA aparece de vez em quando.
   const centro: ReactNode = midia?.tocando ? (
     <Revezador
       itens={[
@@ -271,10 +282,10 @@ export function Notch() {
       ]}
     />
   ) : midia ? (
-    <CentroPausado ia={chipIA} />
-  ) : (
-    chipIA
-  )
+    <CentroAlternado ia={chipIA} base={<MascoteFiruleiro />} />
+  ) : chipIA ? (
+    <CentroAlternado ia={chipIA} base={null} />
+  ) : null
 
   const modo: 'aberto' | 'espiada' | 'aviso' | 'recolhido' = aberto ? 'aberto' : espiada ? 'espiada' : aviso ? 'aviso' : 'recolhido'
   const tamanho =
@@ -423,7 +434,7 @@ export function Notch() {
                 </main>
 
                 <footer className="h-[18px] shrink-0 pb-2.5">
-                  <Pontos total={PAGINAS.length} atual={indice} ir={irPara} />
+                  <Pontos total={visiveis.length} atual={indice} ir={irPara} />
                 </footer>
               </motion.div>
             )}
@@ -478,32 +489,38 @@ function Revezador({ itens }: { itens: ItemRevezado[] }) {
 }
 
 const VEZ_DO_MASCOTE = 12_000
+/** Sem player e sem mascote, o centro fica vazio esse tempo entre uma aparição da IA e outra. */
+const VEZ_DO_VAZIO = 20_000
 const VEZ_DA_IA = 4_000
 
 /**
- * Centro com a música pausada: o Faísca alterna com o uso da IA. O mascote
- * fica sempre montado (só some com fade) para não perder o lugar no roteiro.
+ * Centro que alterna uma base (o Faísca, ou nada) com o uso da IA. A base
+ * fica sempre montada (só some com fade) para o mascote não perder o lugar
+ * no roteiro.
  */
-function CentroPausado({ ia }: { ia: ReactNode | null }) {
+function CentroAlternado({ ia, base }: { ia: ReactNode | null; base: ReactNode | null }) {
   const [mostrarIA, setMostrarIA] = useState(false)
   const temIA = ia !== null
+  const pausa = base ? VEZ_DO_MASCOTE : VEZ_DO_VAZIO
 
   useEffect(() => {
     if (!temIA) {
       setMostrarIA(false)
       return
     }
-    const t = setTimeout(() => setMostrarIA((v) => !v), mostrarIA ? VEZ_DA_IA : VEZ_DO_MASCOTE)
+    const t = setTimeout(() => setMostrarIA((v) => !v), mostrarIA ? VEZ_DA_IA : pausa)
     return () => clearTimeout(t)
-  }, [mostrarIA, temIA])
+  }, [mostrarIA, temIA, pausa])
 
   const esconder = { opacity: 0, y: -10, filter: 'blur(4px)' }
   const mostrar = { opacity: 1, y: 0, filter: 'blur(0px)' }
   return (
-    <div className="relative grid place-items-center">
-      <motion.div animate={mostrarIA ? esconder : mostrar} transition={{ ...MOLA, opacity: { duration: 0.18 } }}>
-        <MascoteFiruleiro />
-      </motion.div>
+    <div className="relative grid min-h-5 min-w-5 place-items-center">
+      {base && (
+        <motion.div animate={mostrarIA ? esconder : mostrar} transition={{ ...MOLA, opacity: { duration: 0.18 } }}>
+          {base}
+        </motion.div>
+      )}
       <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <AnimatePresence>
           {mostrarIA && (
@@ -517,17 +534,16 @@ function CentroPausado({ ia }: { ia: ReactNode | null }) {
   )
 }
 
-/** Uso da IA em uma linha: faísca colorida, % e quanto falta para resetar. */
-function ChipIA({ pct, resetaEm, rotulo }: { pct: number; resetaEm: number | null; rotulo: string | null }) {
+/** Uso da IA em uma linha curta: faísca colorida, % e quanto falta para resetar. */
+function ChipIA({ pct, resetaEm }: { pct: number; resetaEm: number | null }) {
   const cor = corUso(pct)
   return (
-    <div className="flex items-center gap-1 text-[11px] whitespace-nowrap">
-      <Sparkles size={11} style={{ color: cor }} />
-      {rotulo && <span className="max-w-[52px] truncate text-zinc-400">{rotulo}</span>}
+    <div className="flex items-center gap-1.5 text-[12px] whitespace-nowrap">
+      <Sparkles size={12} style={{ color: cor }} />
       <span className="font-bold tabular-nums" style={{ color: cor }}>
         {Math.round(pct * 100)}%
       </span>
-      {resetaEm && <span className="text-zinc-500">· {duracaoCompacta(resetaEm - Date.now())}</span>}
+      {resetaEm && <span className="text-[10px] text-zinc-500">{duracaoCompacta(resetaEm - Date.now())}</span>}
     </div>
   )
 }
