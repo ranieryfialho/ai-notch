@@ -5,7 +5,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { Bell, BookOpen, Check, Droplet, Info, Loader2, LogIn, Monitor, Plus, Sparkles, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, mensagemDeErro, type ContaIA, type JanelaUso, type ProvedorIA } from '../lib/api'
-import { PAGINAS_NOTCH, useConfig, type Config, type PaginaNotch } from '../lib/config'
+import { PAGINAS_NOTCH, useConfig, type Config, type PaginaNotch, type Posicao } from '../lib/config'
 import { corUso, duracaoCurta } from '../lib/formato'
 import { Mascote } from '../notch/Mascote'
 import { EVENTO_CONTAS_IA } from '../notch/useUsoIA'
@@ -103,15 +103,18 @@ function Geral({ config, atualizar, verGuia }: PropsSecao & { verGuia: () => voi
     <Pagina titulo="Geral" descricao="Como o notch aparece na sua tela.">
       <Cartao>
         <Interruptor rotulo="Iniciar com o sistema" descricao="Abre o AI Notch quando você liga o computador." valor={!!iniciarComSistema} onChange={alternarInicio} />
+        <Linha rotulo="Posição" descricao="Em que borda da tela o notch fica. Nas laterais ele fica em pé.">
+          <SeletorPosicao valor={config.posicao} onChange={(v) => atualizar((c) => ({ ...c, posicao: v }))} />
+        </Linha>
         <Interruptor
           rotulo="Notch mínimo"
-          descricao="Quando não há nada acontecendo, vira só uma linha fina no topo da tela."
+          descricao="Quando não há nada acontecendo, vira só uma linha fina na borda da tela."
           valor={config.notchMinimo}
           onChange={(v) => atualizar((c) => ({ ...c, notchMinimo: v }))}
         />
         <Interruptor
           rotulo="Mostrar mascote"
-          descricao="O Faísca aparece no lugar do indicador de energia e muda de humor com o que está acontecendo."
+          descricao="Sem música tocando, o Faísca passeia pelo meio do notch e muda de humor com o que está acontecendo."
           valor={config.mascote}
           onChange={(v) => atualizar((c) => ({ ...c, mascote: v }))}
         />
@@ -125,7 +128,7 @@ function Geral({ config, atualizar, verGuia }: PropsSecao & { verGuia: () => voi
       <PaginasDoNotch config={config} atualizar={atualizar} />
 
       <p className="mt-4 text-xs text-zinc-500">
-        Dica: passe o mouse no notch para abrir; no canto direito, abre só a espiada das IAs.{' '}
+        Dica: passe o mouse no notch para abrir; na ponta direita (ou de baixo, nas laterais), abre só a espiada das IAs.{' '}
         <button type="button" onClick={verGuia} className="text-violet-300 hover:underline">
           Ver o guia completo
         </button>
@@ -577,7 +580,7 @@ function Sobre() {
             <p className="text-sm text-zinc-400">{versao && `Versão ${versao} · `}Windows, macOS e Linux</p>
           </div>
         </div>
-        <p className="mt-4 text-sm text-zinc-400">Música com letra sincronizada, foco, água, tarefas, prateleira de arquivos e o uso das suas IAs, num notch no topo da tela.</p>
+        <p className="mt-4 text-sm text-zinc-400">Música com letra sincronizada, foco, água, tarefas, prateleira de arquivos e o uso das suas IAs, num notch na borda da tela.</p>
         <p className="mt-3 text-xs text-zinc-500">
           Letras fornecidas pelo{' '}
           <button type="button" className="text-violet-300 hover:underline" onClick={() => void openUrl('https://lrclib.net')}>
@@ -634,6 +637,32 @@ function Interruptor({ rotulo, descricao, valor, onChange }: { rotulo: string; d
         <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${valor ? 'left-[22px]' : 'left-0.5'}`} />
       </button>
     </Linha>
+  )
+}
+
+const POSICOES: { id: Posicao; rotulo: string }[] = [
+  { id: 'topo', rotulo: 'Topo' },
+  { id: 'base', rotulo: 'Base' },
+  { id: 'esquerda', rotulo: 'Esquerda' },
+  { id: 'direita', rotulo: 'Direita' },
+]
+
+function SeletorPosicao({ valor, onChange }: { valor: Posicao; onChange: (v: Posicao) => void }) {
+  return (
+    <div role="radiogroup" className="flex shrink-0 rounded-lg border border-white/10 bg-zinc-950 p-0.5">
+      {POSICOES.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          role="radio"
+          aria-checked={valor === p.id}
+          onClick={() => onChange(p.id)}
+          className={`rounded-md px-2.5 py-1 text-xs transition ${valor === p.id ? 'bg-violet-500 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+        >
+          {p.rotulo}
+        </button>
+      ))}
+    </div>
   )
 }
 

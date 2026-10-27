@@ -31,7 +31,9 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let janela = app.get_webview_window(notch::JANELA_NOTCH).expect("janela do notch no tauri.conf.json");
-            notch::posicionar(&janela, LARGURA_INICIAL, ALTURA_INICIAL)?;
+            notch::posicionar(&janela, LARGURA_INICIAL, ALTURA_INICIAL, notch::Posicao::Topo)?;
+            #[cfg(target_os = "linux")]
+            notch::avisar_saida_do_mouse(&janela)?;
             #[cfg(target_os = "macos")]
             notch::elevar_acima_da_barra_de_menus(&janela);
 
@@ -106,15 +108,34 @@ fn criar_bandeja(app: &AppHandle) -> tauri::Result<()> {
 /// No Wayland não dá para posicionar janelas nem mantê-las sempre no topo
 /// (o compositor decide), então forçamos XWayland, a não ser que o usuário
 /// já tenha escolhido um backend. O DMA-BUF desligado evita tela branca do
-/// WebKitGTK em drivers NVIDIA.
+/// WebKitGTK em drivers NVIDIA, mas com Mesa (Intel/AMD, inclusive notebooks
+/// híbridos) ele quebra a composição: só os elementos animados apareciam.
 fn preparar_ambiente_linux() {
     #[cfg(target_os = "linux")]
     {
         if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_some() {
             std::env::set_var("GDK_BACKEND", "x11");
         }
-        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() && so_gpu_nvidia() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
     }
+}
+
+/// Todas as GPUs em /sys/class/drm são NVIDIA (fabricante 0x10de)? Em
+/// notebooks híbridos a Intel/AMD desenha a tela, e aí o DMA-BUF funciona.
+#[cfg(target_os = "linux")]
+fn so_gpu_nvidia() -> bool {
+    let Ok(placas) = std::fs::read_dir("/sys/class/drm") else { return false };
+    let fabricantes: Vec<String> = placas
+        .flatten()
+        .filter(|p| {
+            let nome = p.file_name();
+            let nome = nome.to_string_lossy();
+            nome.starts_with("card") && !nome.contains('-')
+        })
+        .filter_map(|p| std::fs::read_to_string(p.path().join("device/vendor")).ok())
+        .map(|v| v.trim().to_lowercase())
+        .collect();
+    !fabricantes.is_empty() && fabricantes.iter().all(|v| v == "0x10de")
 }

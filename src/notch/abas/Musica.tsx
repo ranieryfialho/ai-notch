@@ -5,7 +5,7 @@ import type { Midia } from '../../lib/api'
 import { mmss } from '../../lib/formato'
 import { linhaAtual } from '../../lib/lrc'
 import { Mascote } from '../Mascote'
-import { MOLA, MOLA_SUAVE } from '../ui'
+import { desfoque, MOLA, MOLA_SUAVE } from '../ui'
 import { useLetra, type EstadoLetra } from '../useMidia'
 
 type Props = {
@@ -158,9 +158,9 @@ function LinhaDaLetra({ letra, posicaoMs }: { letra: EstadoLetra | null; posicao
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.p
           key={i}
-          initial={{ opacity: 0, y: 16, filter: 'blur(4px)' }}
-          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, y: -16, filter: 'blur(4px)' }}
+          initial={{ opacity: 0, y: 16, ...desfoque(4) }}
+          animate={{ opacity: 1, y: 0, ...desfoque(0) }}
+          exit={{ opacity: 0, y: -16, ...desfoque(4) }}
           transition={MOLA_SUAVE}
           className="truncate text-[16px] font-bold text-white"
         >

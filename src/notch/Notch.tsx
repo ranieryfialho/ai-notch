@@ -13,8 +13,9 @@ import { Musica } from './abas/Musica'
 import { Prateleira } from './abas/Prateleira'
 import { Tarefas } from './abas/Tarefas'
 import { notificarSistema, useAvisos, type Aviso, type IconeAviso } from './avisos'
-import { Mascote, MascoteFiruleiro, type Humor } from './Mascote'
-import { AnelBateria, dataCurta, horaCurta, MOLA, Pontos, SetaNav, Titulo } from './ui'
+import { MascoteFiruleiro, type Humor } from './Mascote'
+import { ALINHAMENTO, cantos, daBorda, ehVertical, orelhas } from './posicao'
+import { AnelBateria, dataCurta, desfoque, horaCurta, MOLA, Pontos, SetaNav, Titulo } from './ui'
 import { useAgua } from './useAgua'
 import { NA_TOMADA, useBateria } from './useBateria'
 import { useJanelaNotch } from './useJanelaNotch'
@@ -36,6 +37,9 @@ const PAGINAS: { id: Pagina; titulo: [string, string?, string?] }[] = [
 const TAMANHO = {
   recolhido: { l: 210, a: 30 },
   minimo: { l: 150, a: 8 },
+  // Nas laterais o recolhido fica em pé; aberto, aviso e espiada continuam deitados para o texto caber.
+  recolhidoVertical: { l: 32, a: 210 },
+  minimoVertical: { l: 8, a: 150 },
   aviso: { l: 360, a: 58 },
   aberto: { l: 540, a: 172 },
 }
@@ -43,20 +47,22 @@ const TAMANHO = {
 /** Faixa da espiada das IAs: altura cresce com o número de contas (até 4). */
 const espiadaTamanho = (contas: number) => ({ l: 470, a: 14 + Math.min(4, Math.max(1, contas)) * 24 })
 
-/** Largura (px) do canto direito do notch recolhido que abre a espiada das IAs. */
+/** Tamanho (px) da ponta do notch recolhido (direita, ou de baixo nas laterais) que abre a espiada das IAs. */
 const ZONA_ESPIADA = 56
 
-/** Curva côncava nos cantos de cima, como o notch se fundindo na borda da tela. */
+/** Curva côncava onde o notch encontra a borda da tela, como se escorresse dela. */
 const ORELHA = 10
 
 const variantesPagina = {
-  entrar: (dir: number) => ({ x: dir * 70, opacity: 0, filter: 'blur(6px)', scale: 0.96 }),
-  centro: { x: 0, opacity: 1, filter: 'blur(0px)', scale: 1 },
-  sair: (dir: number) => ({ x: dir * -70, opacity: 0, filter: 'blur(6px)', scale: 0.96 }),
+  entrar: (dir: number) => ({ x: dir * 70, opacity: 0, ...desfoque(6), scale: 0.96 }),
+  centro: { x: 0, opacity: 1, ...desfoque(0), scale: 1 },
+  sair: (dir: number) => ({ x: dir * -70, opacity: 0, ...desfoque(6), scale: 0.96 }),
 }
 
 export function Notch() {
   const [config, atualizarConfig] = useConfig()
+  const borda = config.posicao
+  const vertical = ehVertical(borda)
   const [aberto, setAberto] = useState(false)
   const [espiada, setEspiada] = useState(false)
   const zonaHover = useRef<'geral' | 'ia' | null>(null)
@@ -197,11 +203,12 @@ export function Notch() {
   }
   // Voltar para dentro antes do notch fechar cancela o fechamento.
   const entrar = () => clearTimeout(timerHover.current)
-  // O canto direito abre só a espiada das IAs; o resto do notch abre tudo.
+  // A ponta direita (de baixo, nas laterais) abre só a espiada das IAs; o resto do notch abre tudo.
   const mover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (aberto || espiada) return
-    const borda = e.currentTarget.getBoundingClientRect().right
-    const zona = usos.length > 0 && e.clientX > borda - ZONA_ESPIADA ? 'ia' : 'geral'
+    const caixa = e.currentTarget.getBoundingClientRect()
+    const naPonta = vertical ? e.clientY > caixa.bottom - ZONA_ESPIADA : e.clientX > caixa.right - ZONA_ESPIADA
+    const zona = usos.length > 0 && naPonta ? 'ia' : 'geral'
     if (zona === zonaHover.current) return
     zonaHover.current = zona
     if (zona === 'ia') agendar(() => setEspiada(true), 250)
@@ -218,6 +225,11 @@ export function Notch() {
       setArrastando(false)
     }, 450)
   }
+  // Linux: o GTK avisa quando o cursor sai da janela, caso o WebKitGTK não dispare o mouseleave.
+  useEffect(() => {
+    const parar = listen('mouse-saiu', () => sair())
+    return () => void parar.then((f) => f())
+  }, [])
   const clicar = () => {
     if (aberto) return
     // Clicar na espiada abre o notch direto na página das IAs (se estiver ligada).
@@ -237,52 +249,38 @@ export function Notch() {
   }
 
   // ---- Tamanho e conteúdo recolhido ----------------------------------------
+  // A cara do Faísca entre um gesto e outro.
   const humor: Humor =
-    pior && pior.pct >= 0.9
-      ? 'preocupado'
-      : midia?.tocando
-        ? 'curtindo'
-        : agua.bebidoMl >= agua.metaMl
-          ? 'feliz'
-          : new Date().getHours() < 6
-            ? 'dormindo'
-            : 'normal'
+    pior && pior.pct >= 0.9 ? 'preocupado' : agua.bebidoMl >= agua.metaMl ? 'feliz' : new Date().getHours() < 6 ? 'dormindo' : 'normal'
 
-  // Com a música pausada o Faísca passeia pelo centro; não pode estar também aqui.
-  const ladoEsquerdo = midia?.tocando ? (
-    <Capa src={midia.capa} />
-  ) : config.mascote && !midia ? (
-    <Mascote humor={humor} tamanho={20} />
-  ) : (
-    <AnelBateria bateria={bateria ?? NA_TOMADA} />
-  )
+  const ladoEsquerdo = midia?.tocando ? <Capa src={midia.capa} /> : <AnelBateria bateria={bateria ?? NA_TOMADA} />
 
   const ladoDireito = pomodoro.rodando ? (
-    <span className="text-[13px] font-bold tabular-nums" style={{ color: COR_MODO[pomodoro.modo][0] }}>
-      {mmss(pomodoro.restanteMs)}
-    </span>
+    <Relogio texto={mmss(pomodoro.restanteMs)} vertical={vertical} cor={COR_MODO[pomodoro.modo][0]} />
   ) : midia?.tocando ? (
     <Equalizador />
   ) : (
-    <span className="text-[13px] font-bold tabular-nums text-white">{horaCurta(new Date())}</span>
+    <Relogio texto={horaCurta(new Date())} vertical={vertical} />
   )
 
   // O uso da IA (conta mais perto do limite) entra no revezamento do centro.
   // O detalhe por conta fica na espiada; aqui só o essencial, para caber.
-  const chipIA = pior ? <ChipIA pct={pior.pct} resetaEm={pior.janela.resetaEm} /> : null
+  const chipIA = pior ? <ChipIA pct={pior.pct} resetaEm={pior.janela.resetaEm} vertical={vertical} /> : null
 
-  // Tocando: o meio reveza hora, linha do tempo e IA.
-  // Pausado: o Faísca, alternando com a IA. Sem player: a IA aparece de vez em quando.
+  // Tocando: o meio reveza hora, linha do tempo (só deitado, não cabe em pé) e IA.
+  // Pausado ou sem player: o Faísca (se ligado), alternando com a IA.
+  // Sem o Faísca, a IA aparece de vez em quando.
   const centro: ReactNode = midia?.tocando ? (
     <Revezador
+      vertical={vertical}
       itens={[
-        { id: 'hora', conteudo: <span className="text-[13px] font-bold tabular-nums text-white">{horaCurta(new Date())}</span> },
-        ...(midia.duracaoMs > 0 ? [{ id: 'linha', conteudo: <LinhaDoTempo posicaoMs={posicao} duracaoMs={midia.duracaoMs} /> }] : []),
+        { id: 'hora', conteudo: <Relogio texto={horaCurta(new Date())} vertical={vertical} /> },
+        ...(midia.duracaoMs > 0 && !vertical ? [{ id: 'linha', conteudo: <LinhaDoTempo posicaoMs={posicao} duracaoMs={midia.duracaoMs} /> }] : []),
         ...(chipIA ? [{ id: 'ia', conteudo: chipIA }] : []),
       ]}
     />
-  ) : midia ? (
-    <CentroAlternado ia={chipIA} base={<MascoteFiruleiro />} />
+  ) : config.mascote ? (
+    <CentroAlternado ia={chipIA} base={<MascoteFiruleiro humorBase={humor} vertical={vertical} />} />
   ) : chipIA ? (
     <CentroAlternado ia={chipIA} base={null} />
   ) : null
@@ -296,13 +294,20 @@ export function Notch() {
         : modo === 'aviso'
           ? TAMANHO.aviso
           : config.notchMinimo
-            ? TAMANHO.minimo
-            : TAMANHO.recolhido
-  useJanelaNotch(tamanho.l + ORELHA * 2, tamanho.a)
-  const raio = modo === 'aberto' ? 32 : modo === 'aviso' || modo === 'espiada' ? 22 : tamanho.a <= 8 ? 6 : 14
+            ? vertical
+              ? TAMANHO.minimoVertical
+              : TAMANHO.minimo
+            : vertical
+              ? TAMANHO.recolhidoVertical
+              : TAMANHO.recolhido
+  // As orelhas ficam nas pontas ao longo da borda: dos lados no topo/base, em cima e embaixo nas laterais.
+  useJanelaNotch(tamanho.l + (vertical ? 0 : ORELHA * 2), tamanho.a + (vertical ? ORELHA * 2 : 0), borda)
+  const fino = Math.min(tamanho.l, tamanho.a) <= 8
+  const raio = modo === 'aberto' ? 32 : modo === 'aviso' || modo === 'espiada' ? 22 : fino ? 6 : 14
+  const [orelha1, orelha2] = orelhas(borda, ORELHA)
 
   return (
-    <div className="flex h-screen w-screen justify-center overflow-hidden">
+    <div className={`flex h-screen w-screen overflow-hidden ${ALINHAMENTO[borda]}`}>
       <motion.div
         className="relative"
         initial={false}
@@ -314,26 +319,32 @@ export function Notch() {
         onWheel={rolar}
         onClick={clicar}
       >
-        <span className="orelha orelha-esq" style={{ width: ORELHA, height: ORELHA, left: -ORELHA }} />
-        <span className="orelha orelha-dir" style={{ width: ORELHA, height: ORELHA, right: -ORELHA }} />
+        <span className="orelha" style={orelha1} />
+        <span className="orelha" style={orelha2} />
         <motion.div
           className="absolute inset-0 overflow-hidden bg-black text-white"
           initial={false}
-          animate={{ borderBottomLeftRadius: raio, borderBottomRightRadius: raio }}
+          animate={cantos(borda, raio)}
           transition={MOLA}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            {modo === 'recolhido' && tamanho.a > 8 && (
+            {modo === 'recolhido' && !fino && (
               <motion.div
                 key="recolhido"
-                initial={{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }}
+                initial={{ opacity: 0, scale: 0.8, ...desfoque(4) }}
+                animate={{ opacity: 1, scale: 1, ...desfoque(0) }}
+                exit={{ opacity: 0, scale: 0.8, ...desfoque(4) }}
                 transition={{ duration: 0.2 }}
-                className="relative flex h-full items-center justify-between px-3.5"
+                className={`relative flex h-full items-center justify-between ${vertical ? 'flex-col py-3.5' : 'px-3.5'}`}
               >
                 <div className="grid min-w-[22px] place-items-center">{ladoEsquerdo}</div>
-                {centro && <div className="absolute inset-y-0 left-1/2 grid -translate-x-1/2 place-items-center">{centro}</div>}
+                {centro && (
+                  <div
+                    className={`absolute grid place-items-center ${vertical ? 'inset-x-0 top-1/2 -translate-y-1/2' : 'inset-y-0 left-1/2 -translate-x-1/2'}`}
+                  >
+                    {centro}
+                  </div>
+                )}
                 <div className="grid min-w-[22px] place-items-center">{ladoDireito}</div>
               </motion.div>
             )}
@@ -341,9 +352,9 @@ export function Notch() {
             {modo === 'espiada' && (
               <motion.div
                 key="espiada"
-                initial={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
+                animate={{ opacity: 1, x: 0, y: 0, ...desfoque(0) }}
+                exit={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
                 transition={{ ...MOLA, opacity: { duration: 0.2 } }}
                 className="h-full"
               >
@@ -354,9 +365,9 @@ export function Notch() {
             {modo === 'aviso' && aviso && (
               <motion.div
                 key={`aviso-${aviso.id}`}
-                initial={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -8, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
+                animate={{ opacity: 1, x: 0, y: 0, ...desfoque(0) }}
+                exit={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
                 transition={{ ...MOLA, opacity: { duration: 0.2 } }}
                 className="h-full"
               >
@@ -367,9 +378,9 @@ export function Notch() {
             {modo === 'aberto' && (
               <motion.div
                 key="aberto"
-                initial={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
+                initial={{ opacity: 0, ...daBorda(borda, 10), ...desfoque(8) }}
+                animate={{ opacity: 1, x: 0, y: 0, ...desfoque(0) }}
+                exit={{ opacity: 0, ...daBorda(borda, 10), ...desfoque(8) }}
                 transition={{ duration: 0.22, delay: 0.06 }}
                 className="flex h-full flex-col"
               >
@@ -460,7 +471,7 @@ type ItemRevezado = { id: string; conteudo: ReactNode }
 const INTERVALO_REVEZAMENTO = 4000
 
 /** Alterna os itens a cada poucos segundos com o mesmo deslize + desfoque das páginas. */
-function Revezador({ itens }: { itens: ItemRevezado[] }) {
+function Revezador({ itens, vertical }: { itens: ItemRevezado[]; vertical: boolean }) {
   const [vez, setVez] = useState(0)
 
   useEffect(() => {
@@ -471,13 +482,13 @@ function Revezador({ itens }: { itens: ItemRevezado[] }) {
 
   const item = itens[vez % itens.length]
   return (
-    <div className="relative grid h-[18px] place-items-center overflow-hidden">
+    <div className={`relative grid place-items-center overflow-hidden ${vertical ? 'h-[34px]' : 'h-[18px]'}`}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.div
           key={item.id}
-          initial={{ y: 12, opacity: 0, filter: 'blur(4px)' }}
-          animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-          exit={{ y: -12, opacity: 0, filter: 'blur(4px)' }}
+          initial={{ y: 12, opacity: 0, ...desfoque(4) }}
+          animate={{ y: 0, opacity: 1, ...desfoque(0) }}
+          exit={{ y: -12, opacity: 0, ...desfoque(4) }}
           transition={{ ...MOLA, opacity: { duration: 0.18 }, filter: { duration: 0.18 } }}
           className="grid place-items-center"
         >
@@ -512,8 +523,8 @@ function CentroAlternado({ ia, base }: { ia: ReactNode | null; base: ReactNode |
     return () => clearTimeout(t)
   }, [mostrarIA, temIA, pausa])
 
-  const esconder = { opacity: 0, y: -10, filter: 'blur(4px)' }
-  const mostrar = { opacity: 1, y: 0, filter: 'blur(0px)' }
+  const esconder = { opacity: 0, y: -10, ...desfoque(4) }
+  const mostrar = { opacity: 1, y: 0, ...desfoque(0) }
   return (
     <div className="relative grid min-h-5 min-w-5 place-items-center">
       {base && (
@@ -524,7 +535,7 @@ function CentroAlternado({ ia, base }: { ia: ReactNode | null; base: ReactNode |
       <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <AnimatePresence>
           {mostrarIA && (
-            <motion.div initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={mostrar} exit={esconder} transition={{ ...MOLA, opacity: { duration: 0.18 } }}>
+            <motion.div initial={{ opacity: 0, y: 10, ...desfoque(4) }} animate={mostrar} exit={esconder} transition={{ ...MOLA, opacity: { duration: 0.18 } }}>
               {ia}
             </motion.div>
           )}
@@ -534,9 +545,19 @@ function CentroAlternado({ ia, base }: { ia: ReactNode | null; base: ReactNode |
   )
 }
 
-/** Uso da IA em uma linha curta: faísca colorida, % e quanto falta para resetar. */
-function ChipIA({ pct, resetaEm }: { pct: number; resetaEm: number | null }) {
+/** Uso da IA em uma linha curta: faísca colorida, % e quanto falta para resetar. Em pé, só faísca e %. */
+function ChipIA({ pct, resetaEm, vertical }: { pct: number; resetaEm: number | null; vertical: boolean }) {
   const cor = corUso(pct)
+  if (vertical) {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <Sparkles size={12} style={{ color: cor }} />
+        <span className="text-[10px] font-bold tabular-nums" style={{ color: cor }}>
+          {Math.round(pct * 100)}%
+        </span>
+      </div>
+    )
+  }
   return (
     <div className="flex items-center gap-1.5 text-[12px] whitespace-nowrap">
       <Sparkles size={12} style={{ color: cor }} />
@@ -605,6 +626,24 @@ function LinhaDoTempo({ posicaoMs, duracaoMs }: { posicaoMs: number; duracaoMs: 
       </div>
       <span>-{mmss(duracaoMs - posicaoMs)}</span>
     </div>
+  )
+}
+
+/** Hora (ou o timer do foco); em pé, "10:13" vira duas linhas para caber na largura. */
+function Relogio({ texto, vertical, cor = '#fff' }: { texto: string; vertical: boolean; cor?: string }) {
+  if (!vertical) {
+    return (
+      <span className="text-[13px] font-bold tabular-nums" style={{ color: cor }}>
+        {texto}
+      </span>
+    )
+  }
+  return (
+    <span className="flex flex-col items-center text-[12px] leading-[13px] font-bold tabular-nums" style={{ color: cor }}>
+      {texto.split(':').map((parte, i) => (
+        <span key={i}>{parte}</span>
+      ))}
+    </span>
   )
 }
 

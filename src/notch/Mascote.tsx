@@ -46,8 +46,10 @@ const ANIMACAO_GESTO: Record<Exclude<Gesto, 'piscar'>, TargetAndTransition> = {
 /**
  * O Faísca seguindo o roteiro: anda até um lugar, faz um gesto e fica 60 s
  * por lá antes do próximo passo. A posição se mantém entre os passos.
+ * `humorBase` é a cara dele entre um gesto e outro. Com `vertical` (notch nas
+ * laterais) ele anda para cima e para baixo, sem girar o rosto.
  */
-export function MascoteFiruleiro({ tamanho = 20 }: { tamanho?: number }) {
+export function MascoteFiruleiro({ tamanho = 20, humorBase = 'normal', vertical = false }: { tamanho?: number; humorBase?: Humor; vertical?: boolean }) {
   const [indice, setIndice] = useState(0)
   const [lugar, setLugar] = useState<Lugar>(0)
   const [andando, setAndando] = useState(false)
@@ -85,7 +87,7 @@ export function MascoteFiruleiro({ tamanho = 20 }: { tamanho?: number }) {
   }, [indice])
 
   const origem = lugarAnterior(indice) ?? 0
-  const direcao = andando ? Math.sign(lugar - origem) : 0
+  const direcao = andando && !vertical ? Math.sign(lugar - origem) : 0
   const duracaoAndar = andando ? Math.max(0.6, (ALCANCE * Math.abs(lugar - origem)) / VELOCIDADE) : 0.3
 
   return (
@@ -94,8 +96,8 @@ export function MascoteFiruleiro({ tamanho = 20 }: { tamanho?: number }) {
         className="relative grid place-items-center"
         style={{ transformStyle: 'preserve-3d' }}
         initial={false}
-        animate={{ x: lugar * ALCANCE, rotateY: andando ? direcao * 28 : 0 }}
-        transition={{ x: { duration: duracaoAndar, ease: 'easeInOut' }, rotateY: { duration: 0.35 } }}
+        animate={vertical ? { x: 0, y: lugar * ALCANCE, rotateY: 0 } : { x: lugar * ALCANCE, y: 0, rotateY: direcao * 28 }}
+        transition={{ x: { duration: duracaoAndar, ease: 'easeInOut' }, y: { duration: duracaoAndar, ease: 'easeInOut' }, rotateY: { duration: 0.35 } }}
         onAnimationComplete={() => {
           if (!andando) return
           setAndando(false)
@@ -117,7 +119,7 @@ export function MascoteFiruleiro({ tamanho = 20 }: { tamanho?: number }) {
               proximo()
             }}
           >
-            <Mascote humor={humor} tamanho={tamanho} parado olhar={direcao} andando={andando} />
+            <Mascote humor={humor === 'normal' ? humorBase : humor} tamanho={tamanho} parado olhar={direcao} andando={andando} />
           </motion.div>
         </motion.div>
         <motion.span

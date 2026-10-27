@@ -17,20 +17,20 @@ export function ComoUsar() {
 
       <Topico icone={<Sparkles size={16} />} titulo="Canto direito: espiada das IAs" destaque>
         <Item>
-          <b>Pare o mouse no canto direito</b> do notch recolhido. Abre só uma faixa fina com todas as suas contas: barra de cada janela (5h, 7d), % usada e
+          <b>Pare o mouse na ponta direita</b> do notch recolhido (na de baixo, se ele estiver numa lateral). Abre só uma faixa fina com todas as suas contas: barra de cada janela (5h, 7d), % usada e
           quanto falta para resetar. O resto do notch não expande.
         </Item>
         <Item>
           <b>Clique na faixa</b> para abrir o painel completo direto em Minhas IAs.
         </Item>
-        <Item>A espiada só existe com alguma conta conectada em Minhas IAs; sem conta, o canto direito abre o painel normalmente.</Item>
+        <Item>A espiada só existe com alguma conta conectada em Minhas IAs; sem conta, essa ponta abre o painel normalmente.</Item>
         <EspiadaExemplo />
       </Topico>
 
       <Topico icone={<PanelTop size={16} />} titulo="O que aparece no notch recolhido">
         <Tabela
           linhas={[
-            ['Nada tocando', 'Energia (ou o Faísca, se ligado em Geral) à esquerda e hora à direita. O uso da IA aparece no centro por 4 s a cada 20 s.'],
+            ['Nada tocando', 'Igual à música pausada: energia à esquerda, hora à direita e o Faísca no centro (se ligado em Geral). Com ele desligado, o uso da IA aparece no centro por 4 s a cada 20 s.'],
             ['Música tocando', 'Capa à esquerda, equalizador à direita. O centro reveza a cada 4 s entre hora, linha do tempo da música e uso da IA.'],
             ['Música pausada', 'Energia à esquerda e o Faísca passeando pelo centro (anda até um canto, pisca, salta, faz pirueta, com 60 s de pausa entre cada passo), alternando com o uso da IA.'],
             ['Pomodoro rodando', 'A contagem regressiva aparece à direita, na cor do modo (foco, pausa curta, pausa longa).'],
@@ -92,7 +92,7 @@ export function DicaEspiada() {
           <b className="text-white">Sem abrir o notch:</b> o uso da conta mais perto do limite aparece no centro do notch recolhido, revezando com a hora.
         </p>
         <p>
-          <b className="text-white">Detalhe de todas as contas:</b> pare o mouse no <b>canto direito</b> do notch para abrir a espiada. Clique nela para ver tudo.
+          <b className="text-white">Detalhe de todas as contas:</b> pare o mouse na <b>ponta direita</b> do notch (de baixo, nas laterais) para abrir a espiada. Clique nela para ver tudo.
         </p>
       </div>
     </div>

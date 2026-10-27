@@ -25,17 +25,11 @@ body.janela-config {
   background: #09090b;
 }
 
-/* Cantos côncavos no topo: o notch "escorre" da borda da tela. */
+/* Cantos côncavos onde o notch encontra a borda da tela; o desenho vem de posicao.ts. */
 .orelha {
   position: absolute;
   top: 0;
   pointer-events: none;
-}
-.orelha-esq {
-  background: radial-gradient(circle at 0% 100%, transparent 9.5px, #000 10px);
-}
-.orelha-dir {
-  background: radial-gradient(circle at 100% 100%, transparent 9.5px, #000 10px);
 }
 
 .equalizador {

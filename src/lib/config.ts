@@ -14,9 +14,13 @@ export const PAGINAS_NOTCH = [
 
 export type PaginaNotch = (typeof PAGINAS_NOTCH)[number]['id']
 
+/** Borda da tela onde o notch fica. */
+export type Posicao = 'topo' | 'base' | 'esquerda' | 'direita'
+
 export type Config = {
   /** Quais páginas aparecem no carrossel do notch aberto. */
   paginas: Record<PaginaNotch, boolean>
+  posicao: Posicao
   notchMinimo: boolean
   mascote: boolean
   letras: boolean
@@ -35,8 +39,9 @@ export type Config = {
 
 export const CONFIG_PADRAO: Config = {
   paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true },
+  posicao: 'topo',
   notchMinimo: false,
-  mascote: false,
+  mascote: true,
   letras: true,
   avisos: { musica: true, bateria: true, capsLock: true, internet: true, ia: true, notificacaoDoSistema: true },
   foco: { focoMin: 25, pausaCurtaMin: 5, pausaLongaMin: 15, ciclosAtePausaLonga: 4 },

@@ -6,6 +6,14 @@ import type { Bateria } from '../lib/api'
 export const MOLA = { type: 'spring', stiffness: 420, damping: 34, mass: 0.9 } as const
 export const MOLA_SUAVE = { type: 'spring', stiffness: 260, damping: 30 } as const
 
+/**
+ * O WebKitGTK compõe mal `filter: blur()` animado em janela transparente
+ * (caixas retangulares, rastros e quadros perdidos), então no Linux as
+ * transições ficam só com deslize + fade.
+ */
+const SEM_DESFOQUE = navigator.userAgent.includes('Linux')
+export const desfoque = (px: number) => (SEM_DESFOQUE ? {} : { filter: `blur(${px}px)` })
+
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 

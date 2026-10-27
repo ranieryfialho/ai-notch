@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import type { Posicao } from './config'
 
 export type Midia = {
   titulo: string
@@ -32,7 +33,7 @@ export type ContaIA = { id: string; provedor: string; rotulo: string; planoUsdMe
 export type InfoArquivo = { caminho: string; nome: string; existe: boolean; pasta: boolean; tamanho: number }
 
 export const api = {
-  definirTamanhoNotch: (largura: number, altura: number) => invoke<void>('definir_tamanho_notch', { largura, altura }),
+  definirTamanhoNotch: (largura: number, altura: number, posicao: Posicao) => invoke<void>('definir_tamanho_notch', { largura, altura, posicao }),
   abrirConfiguracoes: (secao?: string) => invoke<void>('abrir_configuracoes', { secao: secao ?? null }),
 
   midiaAtual: () => invoke<Midia | null>('midia_atual'),
