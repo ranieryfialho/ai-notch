@@ -48,6 +48,8 @@ pub fn comando(acao: Acao) -> Result<(), String> {
     let player = buscador.find_active().map_err(|e| e.to_string())?;
     match acao {
         Acao::TocarPausar => player.play_pause(),
+        Acao::Pausar => player.pause(),
+        Acao::Tocar => player.play(),
         Acao::Proxima => player.next(),
         Acao::Anterior => player.previous(),
     }

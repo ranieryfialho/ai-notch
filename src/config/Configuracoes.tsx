@@ -2,10 +2,11 @@ import { getVersion } from '@tauri-apps/api/app'
 import { emit, listen } from '@tauri-apps/api/event'
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { BatteryMedium, Bell, BookOpen, Check, Download, Droplet, Info, Loader2, LogIn, Monitor, Plus, Sparkles, Timer, Trash2 } from 'lucide-react'
+import { BatteryMedium, Bell, BookOpen, Check, Download, Droplet, ExternalLink, Info, Keyboard, Loader2, LogIn, Mic, Monitor, Plus, Sparkles, Timer, Trash2, TriangleAlert } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, mensagemDeErro, type ContaIA, type JanelaUso, type ProvedorIA } from '../lib/api'
-import { PAGINAS_NOTCH, useConfig, type Config, type OndePerifericos, type PaginaNotch, type Posicao } from '../lib/config'
+import { api, mensagemDeErro, type ContaIA, type JanelaUso, type ProvedorIA, type StatusDitado } from '../lib/api'
+import { PAGINAS_NOTCH, useConfig, type Config, type ConfigDitado, type OndePerifericos, type PaginaNotch, type Posicao } from '../lib/config'
+import { IDIOMAS, PROVEDORES, provedorInfo, rotuloAtalho, TECLAS_TRAVAR } from '../lib/ditado'
 import {
   comPreferencias,
   corPeriferico,
@@ -26,12 +27,13 @@ import { EVENTO_CONTAS_IA } from '../notch/useUsoIA'
 import { clienteIdCurto, ConfigurarClienteGoogle, useClienteGoogle } from './ClienteGoogle'
 import { ComoUsar, DicaEspiada } from './ComoUsar'
 
-type Secao = 'geral' | 'como-usar' | 'ias' | 'baterias' | 'foco' | 'agua' | 'avisos' | 'sobre'
+type Secao = 'geral' | 'como-usar' | 'ias' | 'ditado' | 'baterias' | 'foco' | 'agua' | 'avisos' | 'sobre'
 
 const SECOES: { id: Secao; rotulo: string; icone: ReactNode }[] = [
   { id: 'geral', rotulo: 'Geral', icone: <Monitor size={16} /> },
   { id: 'como-usar', rotulo: 'Como usar', icone: <BookOpen size={16} /> },
   { id: 'ias', rotulo: 'Minhas IAs', icone: <Sparkles size={16} /> },
+  { id: 'ditado', rotulo: 'Ditado', icone: <Mic size={16} /> },
   { id: 'baterias', rotulo: 'Barra e baterias', icone: <BatteryMedium size={16} /> },
   { id: 'foco', rotulo: 'Foco', icone: <Timer size={16} /> },
   { id: 'agua', rotulo: 'Água', icone: <Droplet size={16} /> },
@@ -80,6 +82,7 @@ export function Configuracoes() {
       <main className="flex-1 overflow-y-auto p-8">
         {secao === 'geral' && <Geral config={config} atualizar={atualizar} verGuia={() => setSecao('como-usar')} />}
         {secao === 'ias' && <MinhasIAs config={config} atualizar={atualizar} />}
+        {secao === 'ditado' && <DitadoCfg config={config} atualizar={atualizar} />}
         {secao === 'baterias' && <BateriasCfg config={config} atualizar={atualizar} />}
         {secao === 'foco' && <FocoCfg config={config} atualizar={atualizar} />}
         {secao === 'agua' && <AguaCfg config={config} atualizar={atualizar} />}
@@ -579,6 +582,197 @@ function AvisosCfg({ config, atualizar }: PropsSecao) {
   )
 }
 
+// ---- Ditado ----------------------------------------------------------------
+
+function DitadoCfg({ config, atualizar }: PropsSecao) {
+  const d = config.ditado
+  const mudar = (parcial: Partial<ConfigDitado>) => atualizar((c) => ({ ...c, ditado: { ...c.ditado, ...parcial } }))
+  const [status, setStatus] = useState<StatusDitado | null>(null)
+  const [microfones, setMicrofones] = useState<string[]>([])
+  const [capturando, setCapturando] = useState(false)
+  const provedor = provedorInfo(d.provedor)
+  const modelo = d.modelos[d.provedor] ?? provedor.modelos[0].id
+
+  const recarregar = () => void api.ditadoStatus().then(setStatus).catch(() => {})
+  useEffect(() => {
+    recarregar()
+    api.ditadoMicrofones().then(setMicrofones).catch(() => {})
+  }, [])
+
+  // Grava a próxima combinação de teclas como atalho.
+  useEffect(() => {
+    if (!capturando) return
+    void api.ditadoCapturarAtalho(true)
+    const parar = listen<number[]>('ditado-atalho-capturado', ({ payload }) => {
+      setCapturando(false)
+      mudar({ atalho: payload })
+    })
+    return () => {
+      void parar.then((f) => f())
+      void api.ditadoCapturarAtalho(false)
+    }
+  }, [capturando])
+
+  const opcoesProvedor = PROVEDORES.map((p) => ({ id: p.id, rotulo: p.id === 'local' ? 'Offline' : p.rotulo }))
+  const baixado = status?.modelosBaixados.includes(modelo)
+
+  return (
+    <Pagina titulo="Ditado" descricao="Segure o atalho, fale e solte: o texto aparece onde está o cursor, em qualquer aplicativo. O notch mostra a gravação.">
+      <Cartao>
+        <Interruptor rotulo="Ditado por voz" descricao="Desligado, o atalho volta a ser só um atalho." valor={d.ativo} onChange={(ativo) => mudar({ ativo })} />
+        <Linha rotulo="Segure para falar" descricao="Solte para transcrever. Esc cancela. Um toque rápido não grava.">
+          <button
+            type="button"
+            onClick={() => setCapturando((c) => !c)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition ${
+              capturando ? 'bg-violet-500 text-white' : 'bg-white/5 text-zinc-200 hover:bg-white/10'
+            }`}
+          >
+            <Keyboard size={12} />
+            {capturando ? 'Pressione as teclas…' : rotuloAtalho(d.atalho)}
+          </button>
+        </Linha>
+        <Linha rotulo="Falar sem segurar" descricao="Tocada com o atalho pressionado, trava a gravação. Aperte o atalho de novo para parar.">
+          <Seletor valor={d.teclaMaosLivres} opcoes={TECLAS_TRAVAR} onChange={(teclaMaosLivres) => mudar({ teclaMaosLivres })} />
+        </Linha>
+      </Cartao>
+      {status && <AvisosDitado status={status} />}
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-white">Transcrição</h2>
+        <p className="mt-0.5 mb-3 text-xs text-zinc-500">{provedor.descricao}</p>
+        <Cartao>
+          <Linha rotulo="Serviço">
+            <Segmentado valor={d.provedor} opcoes={opcoesProvedor} onChange={(p) => mudar({ provedor: p })} />
+          </Linha>
+          <Linha
+            rotulo="Modelo"
+            descricao={`${provedor.modelos.find((m) => m.id === modelo)?.descricao ?? ''}${d.provedor === 'local' ? (baixado ? ' Já baixado.' : ' Baixado no primeiro uso.') : ''}`}
+          >
+            <SeletorTexto
+              valor={modelo}
+              opcoes={provedor.modelos.map((m) => [m.id, m.rotulo])}
+              onChange={(m) => mudar({ modelos: { ...d.modelos, [d.provedor]: m } })}
+            />
+          </Linha>
+          {provedor.chaveUrl && <ChaveDitado provedor={d.provedor} url={provedor.chaveUrl} dica={status?.chaves[d.provedor] ?? null} mudou={recarregar} />}
+          <Linha rotulo="Idioma" descricao="O principal; trechos em outro idioma continuam no idioma falado.">
+            <SeletorTexto valor={d.idioma} opcoes={IDIOMAS} onChange={(idioma) => mudar({ idioma })} />
+          </Linha>
+          <Interruptor
+            rotulo="Limpeza com IA"
+            descricao="Tira hesitações (é, hã, tipo), repetições e falsos começos e corrige a pontuação. Usa a chave de um serviço na nuvem."
+            valor={d.limpeza}
+            onChange={(limpeza) => mudar({ limpeza })}
+          />
+        </Cartao>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-white">Gravação e colagem</h2>
+        <Cartao className="mt-3">
+          <Linha rotulo="Microfone">
+            <SeletorTexto valor={d.microfone} opcoes={[['', 'Padrão do sistema'], ...microfones.map((m): [string, string] => [m, m])]} onChange={(microfone) => mudar({ microfone })} />
+          </Linha>
+          <Interruptor rotulo="Sons" descricao="Um bipe ao começar e outro ao parar de gravar." valor={d.sons} onChange={(sons) => mudar({ sons })} />
+          <Interruptor
+            rotulo="Pausar a música ao ditar"
+            descricao="Pausa o que estiver tocando enquanto você fala e retoma assim que você solta o atalho."
+            valor={d.pausarMidia}
+            onChange={(pausarMidia) => mudar({ pausarMidia })}
+          />
+          <Interruptor
+            rotulo="Restaurar a área de transferência"
+            descricao="Depois de colar, devolve o que estava copiado antes."
+            valor={d.restaurarAreaTransferencia}
+            onChange={(restaurarAreaTransferencia) => mudar({ restaurarAreaTransferencia })}
+          />
+        </Cartao>
+      </div>
+    </Pagina>
+  )
+}
+
+/** Problemas de permissão do atalho ou da colagem, com o que fazer. */
+function AvisosDitado({ status }: { status: StatusDitado }) {
+  const avisos = [status.teclado.erro, status.colagem.erro].filter((a): a is string => !!a)
+  if (avisos.length === 0) return null
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {avisos.map((a) => (
+        <p key={a} className="flex gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-xs text-amber-200/90">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+          <span className="select-text">{a}</span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function ChaveDitado({ provedor, url, dica, mudou }: { provedor: string; url: string; dica: string | null; mudou: () => void }) {
+  const [chave, setChave] = useState('')
+  const [mensagem, setMensagem] = useState<{ texto: string; ok: boolean } | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+
+  const executar = async (acao: () => Promise<string>) => {
+    setOcupado(true)
+    try {
+      setMensagem({ texto: await acao(), ok: true })
+    } catch (e) {
+      setMensagem({ texto: mensagemDeErro(e), ok: false })
+    } finally {
+      setOcupado(false)
+      mudou()
+    }
+  }
+  const salvar = () =>
+    executar(async () => {
+      await api.ditadoSalvarChave(provedor, chave)
+      setChave('')
+      return chave.trim() ? await api.ditadoVerificarChave(provedor) : 'Chave removida'
+    })
+
+  return (
+    <div className="py-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-100">Chave da API</p>
+        <button type="button" onClick={() => void openUrl(url)} className="flex items-center gap-1 text-xs text-violet-300 hover:underline">
+          Criar chave <ExternalLink size={11} />
+        </button>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input
+          type="password"
+          value={chave}
+          onChange={(e) => setChave(e.target.value)}
+          placeholder={dica ? `Salva: ••••${dica}` : 'Cole a chave aqui'}
+          className="entrada flex-1 font-mono text-xs"
+        />
+        <button
+          type="button"
+          disabled={ocupado || !chave.trim()}
+          onClick={() => void salvar()}
+          className="rounded-lg bg-violet-500 px-3 text-xs font-medium text-white hover:bg-violet-400 disabled:opacity-40"
+        >
+          Salvar
+        </button>
+        {dica && (
+          <button
+            type="button"
+            disabled={ocupado}
+            onClick={() => void executar(() => api.ditadoVerificarChave(provedor))}
+            className="rounded-lg bg-white/5 px-3 text-xs text-zinc-200 hover:bg-white/10 disabled:opacity-40"
+          >
+            {ocupado ? <Loader2 size={12} className="animate-spin" /> : 'Testar'}
+          </button>
+        )}
+      </div>
+      <p className="mt-1.5 text-[11px] text-zinc-500">Fica guardada no cofre do sistema, como as contas das IAs.</p>
+      {mensagem && <p className={`mt-1 text-xs ${mensagem.ok ? 'text-green-300' : 'text-red-300'}`}>{mensagem.texto}</p>}
+    </div>
+  )
+}
+
 // ---- Barra e baterias -----------------------------------------------------
 
 const ONDE: { id: OndePerifericos; rotulo: string }[] = [
@@ -856,6 +1050,18 @@ const POSICOES: { id: Posicao; rotulo: string }[] = [
 
 function SeletorPosicao({ valor, onChange }: { valor: Posicao; onChange: (v: Posicao) => void }) {
   return <Segmentado valor={valor} opcoes={POSICOES} onChange={onChange} />
+}
+
+function SeletorTexto({ valor, opcoes, onChange }: { valor: string; opcoes: [string, string][]; onChange: (v: string) => void }) {
+  return (
+    <select value={valor} onChange={(e) => onChange(e.target.value)} className="entrada w-56 shrink-0">
+      {opcoes.map(([v, r]) => (
+        <option key={v} value={v}>
+          {r}
+        </option>
+      ))}
+    </select>
+  )
 }
 
 function Numero({ valor, min, max, sufixo, onChange }: { valor: number; min: number; max: number; sufixo: string; onChange: (v: number) => void }) {

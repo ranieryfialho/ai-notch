@@ -29,6 +29,36 @@ export type Dispositivo = {
 /** Sistema e painel, para as telas mostrarem só o que funciona ali. */
 export type Ambiente = { so: 'linux' | 'windows' | 'macos'; gnome: boolean; rotuloNaBandeja: boolean }
 
+/** Fase do ditado por voz (evento `ditado-estado`). */
+export type EstadoDitado =
+  | { tipo: 'oculto' }
+  | { tipo: 'gravando'; travado: boolean; inicio: number }
+  | { tipo: 'processando' }
+  | { tipo: 'baixando'; progresso: number }
+  | { tipo: 'mensagem'; texto: string; erro: boolean }
+
+export type EntradaDitado = {
+  id: string
+  criadoEm: number
+  texto: string
+  textoBruto?: string
+  provedor: string
+  modelo: string
+  processamentoMs: number
+  duracaoMs: number
+  palavras: number
+  colado: boolean
+  erro?: string
+}
+
+export type StatusDitado = {
+  teclado: { backend: string; erro: string | null }
+  colagem: { backend: string; erro: string | null }
+  /** Últimos 4 caracteres da chave salva de cada serviço, ou null. */
+  chaves: Record<string, string | null>
+  modelosBaixados: string[]
+}
+
 export type JanelaUso = { rotulo: string; utilizacao: number | null; resetaEm: number | null }
 
 export type ProvedorIA = {
@@ -61,6 +91,16 @@ export const api = {
   modoBarra: () => invoke<boolean>('modo_barra'),
   instalarExtensaoGnome: () => invoke<string>('instalar_extensao_gnome'),
   ambiente: () => invoke<Ambiente>('ambiente'),
+
+  ditadoEstado: () => invoke<EstadoDitado>('ditado_estado'),
+  ditadoStatus: () => invoke<StatusDitado>('ditado_status'),
+  ditadoMicrofones: () => invoke<string[]>('ditado_microfones'),
+  ditadoCapturarAtalho: (ativo: boolean) => invoke<void>('ditado_capturar_atalho', { ativo }),
+  ditadoSalvarChave: (provedor: string, chave: string) => invoke<void>('ditado_salvar_chave', { provedor, chave }),
+  ditadoVerificarChave: (provedor: string) => invoke<string>('ditado_verificar_chave', { provedor }),
+  ditadoHistorico: () => invoke<EntradaDitado[]>('ditado_historico'),
+  ditadoApagar: (id: string) => invoke<void>('ditado_apagar', { id }),
+  ditadoCopiar: (texto: string) => invoke<void>('ditado_copiar', { texto }),
 
   prateleiraInfo: (caminhos: string[]) => invoke<InfoArquivo[]>('prateleira_info', { caminhos }),
   abrirArquivo: (caminho: string) => invoke<void>('abrir_arquivo', { caminho }),

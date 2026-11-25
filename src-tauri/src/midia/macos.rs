@@ -60,6 +60,8 @@ pub fn agora() -> Result<Option<Midia>, String> {
 pub fn comando(acao: Acao) -> Result<(), String> {
     let verbo = match acao {
         Acao::TocarPausar => "playpause",
+        Acao::Pausar => "pause",
+        Acao::Tocar => "play",
         Acao::Proxima => "next track",
         Acao::Anterior => "previous track",
     };

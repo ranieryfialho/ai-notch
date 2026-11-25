@@ -37,8 +37,21 @@ pub struct Midia {
 #[derive(Debug, Clone, Copy)]
 pub enum Acao {
     TocarPausar,
+    /// Explícitas (não alternam), para o ditado pausar e retomar sem adivinhar o estado.
+    Pausar,
+    Tocar,
     Proxima,
     Anterior,
+}
+
+/// Pausa o player se ele estiver tocando; devolve true se pausou. Bloqueante.
+pub fn pausar_se_tocando() -> bool {
+    matches!(plataforma::agora(), Ok(Some(m)) if m.tocando) && plataforma::comando(Acao::Pausar).is_ok()
+}
+
+/// Volta a tocar (depois de `pausar_se_tocando`). Bloqueante.
+pub fn retomar() {
+    let _ = plataforma::comando(Acao::Tocar);
 }
 
 #[tauri::command]

@@ -146,6 +146,8 @@ fn executar(acao: Acao) -> windows::core::Result<()> {
     };
     match acao {
         Acao::TocarPausar => sessao.TryTogglePlayPauseAsync()?.get()?,
+        Acao::Pausar => sessao.TryPauseAsync()?.get()?,
+        Acao::Tocar => sessao.TryPlayAsync()?.get()?,
         Acao::Proxima => sessao.TrySkipNextAsync()?.get()?,
         Acao::Anterior => sessao.TrySkipPreviousAsync()?.get()?,
     };

@@ -1,14 +1,16 @@
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { ArrowBigUp, BatteryCharging, BatteryFull, BatteryLow, Droplet, Music2, Settings, Sparkles, Timer, Wifi, WifiOff } from 'lucide-react'
+import { ArrowBigUp, BatteryCharging, BatteryFull, BatteryLow, Check, Droplet, Info, Loader2, Lock, Music2, Settings, Sparkles, Timer, TriangleAlert, Wifi, WifiOff } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { api } from '../lib/api'
+import { api, type EstadoDitado } from '../lib/api'
 import { usePersistido, useConfig, type PaginaNotch } from '../lib/config'
+import { rotuloTecla, tocarBipe, useDitado } from '../lib/ditado'
 import { comPreferencias, corPeriferico, usePerifericos } from '../lib/perifericos'
 import { corUso, duracaoCompacta, mmss } from '../lib/formato'
 import { Agua } from './abas/Agua'
 import { Baterias } from './abas/Baterias'
+import { Ditado } from './abas/Ditado'
 import { COR_MODO, Foco } from './abas/Foco'
 import { IAs } from './abas/IAs'
 import { Musica } from './abas/Musica'
@@ -36,6 +38,7 @@ const PAGINAS: { id: Pagina; titulo: [string, string?, string?] }[] = [
   { id: 'tarefas', titulo: ['Lista de ', 'Tarefas', '#4ade80'] },
   { id: 'ias', titulo: ['Minhas ', 'IAs', '#a78bfa'] },
   { id: 'baterias', titulo: ['Baterias'] },
+  { id: 'ditado', titulo: ['Ditado'] },
 ]
 
 const TAMANHO = {
@@ -45,6 +48,7 @@ const TAMANHO = {
   recolhidoVertical: { l: 32, a: 210 },
   minimoVertical: { l: 8, a: 150 },
   aviso: { l: 360, a: 58 },
+  ditado: { l: 380, a: 58 },
   aberto: { l: 540, a: 172 },
 }
 
@@ -169,6 +173,18 @@ export function Notch() {
 
   const [prateleira, setPrateleira] = usePersistido<string[]>('prateleira', [])
 
+  // ---- Ditado por voz -------------------------------------------------------
+  // O notch é a "janela de gravação": onda do microfone, tempo, transcrevendo...
+  const { estado: ditado, niveis } = useDitado()
+  const faseAnterior = useRef(ditado.tipo)
+  useEffect(() => {
+    const antes = faseAnterior.current
+    faseAnterior.current = ditado.tipo
+    if (!config.ditado.sons) return
+    if (ditado.tipo === 'gravando' && antes !== 'gravando') tocarBipe('comecar')
+    else if (antes === 'gravando' && ditado.tipo === 'processando') tocarBipe('parar')
+  }, [ditado.tipo])
+
   // ---- Avisos do sistema ---------------------------------------------------
   const ultimaFaixa = useRef<string | null>(null)
   useEffect(() => {
@@ -231,7 +247,7 @@ export function Notch() {
   const entrar = () => clearTimeout(timerHover.current)
   // A ponta direita (de baixo, nas laterais) abre só a espiada das IAs; o resto do notch abre tudo.
   const mover = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (aberto || espiada) return
+    if (aberto || espiada || ditado.tipo !== 'oculto') return
     const caixa = e.currentTarget.getBoundingClientRect()
     const naPonta = vertical ? e.clientY > caixa.bottom - ZONA_ESPIADA : e.clientX > caixa.right - ZONA_ESPIADA
     const zona = usos.length > 0 && naPonta ? 'ia' : 'geral'
@@ -279,7 +295,7 @@ export function Notch() {
     }
   }, [])
   const clicar = () => {
-    if (aberto) return
+    if (aberto || ditado.tipo !== 'oculto') return
     // Clicar na espiada abre o notch direto na página das IAs (se estiver ligada).
     if (espiada) {
       setEspiada(false)
@@ -333,7 +349,8 @@ export function Notch() {
     <CentroAlternado ia={chipIA} base={null} />
   ) : null
 
-  const modo: 'aberto' | 'espiada' | 'aviso' | 'recolhido' = aberto ? 'aberto' : espiada ? 'espiada' : aviso ? 'aviso' : 'recolhido'
+  const modo: 'ditado' | 'aberto' | 'espiada' | 'aviso' | 'recolhido' =
+    ditado.tipo !== 'oculto' ? 'ditado' : aberto ? 'aberto' : espiada ? 'espiada' : aviso ? 'aviso' : 'recolhido'
 
   usePublicarBarra({
     musica: midia
@@ -355,7 +372,9 @@ export function Notch() {
   const escondido = modoBarra && (modo === 'recolhido' || modo === 'aviso')
   const tamanho = escondido
     ? { l: 0, a: 0 }
-    : modo === 'aberto'
+    : modo === 'ditado'
+      ? TAMANHO.ditado
+      : modo === 'aberto'
       ? TAMANHO.aberto
       : modo === 'espiada'
         ? espiadaTamanho(usos.length)
@@ -372,7 +391,7 @@ export function Notch() {
   const orelha = escondido ? 0 : ORELHA
   useJanelaNotch(tamanho.l + (vertical ? 0 : orelha * 2), tamanho.a + (vertical ? orelha * 2 : 0), borda)
   const fino = Math.min(tamanho.l, tamanho.a) <= 8
-  const raio = modo === 'aberto' ? 32 : modo === 'aviso' || modo === 'espiada' ? 22 : fino ? 6 : 14
+  const raio = modo === 'aberto' ? 32 : modo === 'aviso' || modo === 'espiada' || modo === 'ditado' ? 22 : fino ? 6 : 14
   const [orelha1, orelha2] = orelhas(borda, ORELHA)
 
   return (
@@ -444,6 +463,19 @@ export function Notch() {
               </motion.div>
             )}
 
+            {modo === 'ditado' && (
+              <motion.div
+                key="ditado"
+                initial={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
+                animate={{ opacity: 1, x: 0, y: 0, ...desfoque(0) }}
+                exit={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
+                transition={{ ...MOLA, opacity: { duration: 0.2 } }}
+                className="h-full"
+              >
+                <ConteudoDitado estado={ditado} niveis={niveis} teclaTravar={rotuloTecla(config.ditado.teclaMaosLivres)} />
+              </motion.div>
+            )}
+
             {modo === 'aberto' && (
               <motion.div
                 key="aberto"
@@ -510,6 +542,7 @@ export function Notch() {
                       {pagina.id === 'tarefas' && <Tarefas />}
                       {pagina.id === 'ias' && <IAs usos={usos} recarregar={() => void recarregar()} />}
                       {pagina.id === 'baterias' && <Baterias bateria={bateria} perifericos={perifericos} />}
+                      {pagina.id === 'ditado' && <Ditado cfg={config.ditado} />}
                     </motion.div>
                   </AnimatePresence>
                 </main>
@@ -764,4 +797,66 @@ function ConteudoAviso({ aviso, onClick }: { aviso: Aviso; onClick: () => void }
       {aviso.icone === 'musica' && <Equalizador />}
     </div>
   )
+}
+
+/** A janela de gravação do ditado, dentro do notch: onda do microfone e tempo, transcrevendo, baixando o modelo ou o resultado. */
+function ConteudoDitado({ estado, niveis, teclaTravar }: { estado: EstadoDitado; niveis: number[]; teclaTravar: string }) {
+  if (estado.tipo === 'gravando') {
+    return (
+      <div className="flex h-full items-center gap-3 px-5">
+        <span className="relative grid size-3 shrink-0 place-items-center">
+          <span className="absolute size-3 animate-ping rounded-full bg-rose-500/60" />
+          <span className="size-2.5 rounded-full bg-rose-500" />
+        </span>
+        <div className="flex h-7 flex-1 items-center justify-center gap-[3px]">
+          {niveis.map((v, i) => (
+            <span
+              key={i}
+              className="w-[3px] rounded-full bg-rose-300 transition-[height] duration-75"
+              style={{ height: `${3 + Math.min(1, v * 2.8) * 25}px`, opacity: 0.45 + Math.min(1, v * 3) * 0.55 }}
+            />
+          ))}
+        </div>
+        <span className="text-[13px] font-bold tabular-nums">{mmss(Date.now() - estado.inicio)}</span>
+        {estado.travado ? (
+          <span title="Travado: aperte o atalho de novo para parar" className="text-rose-300">
+            <Lock size={13} />
+          </span>
+        ) : (
+          <span className="text-[10px] whitespace-nowrap text-zinc-500">{teclaTravar} trava</span>
+        )}
+      </div>
+    )
+  }
+  if (estado.tipo === 'processando') {
+    return (
+      <div className="flex h-full items-center gap-3 px-5">
+        <Loader2 size={18} className="animate-spin text-violet-300" />
+        <span className="text-[14px] font-bold">Transcrevendo…</span>
+      </div>
+    )
+  }
+  if (estado.tipo === 'baixando') {
+    const pct = Math.round(estado.progresso * 100)
+    return (
+      <div className="flex h-full flex-col justify-center gap-1.5 px-5">
+        <div className="flex items-center justify-between text-[12px]">
+          <span className="font-bold">Baixando o modelo do Whisper</span>
+          <span className="tabular-nums text-zinc-400">{pct}%</span>
+        </div>
+        <div className="h-[4px] overflow-hidden rounded-full bg-zinc-800">
+          <div className="h-full rounded-full bg-violet-300 transition-[width] duration-300" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    )
+  }
+  if (estado.tipo === 'mensagem') {
+    return (
+      <div className="flex h-full items-center gap-3 px-5">
+        <span className={estado.erro ? 'text-red-400' : 'text-zinc-300'}>{estado.erro ? <TriangleAlert size={18} /> : estado.texto.startsWith('Texto copiado') ? <Check size={18} /> : <Info size={18} />}</span>
+        <p className="line-clamp-2 text-[12px] leading-snug">{estado.texto}</p>
+      </div>
+    )
+  }
+  return null
 }

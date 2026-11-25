@@ -1,6 +1,7 @@
 mod ambiente;
 mod bandeja;
 mod barra;
+mod ditado;
 mod ia;
 mod icone_pct;
 mod letras;
@@ -43,6 +44,7 @@ pub fn run() {
             bandeja::criar(app.handle())?;
             perifericos::monitorar(app.handle().clone());
             barra::iniciar(app.handle().clone());
+            ditado::iniciar(app.handle().clone());
             sistema::monitorar_bateria(app.handle().clone());
             sistema::monitorar_caps_lock(app.handle().clone());
             Ok(())
@@ -60,6 +62,15 @@ pub fn run() {
             barra::modo_barra,
             barra::instalar_extensao_gnome,
             ambiente::ambiente,
+            ditado::ditado_estado,
+            ditado::ditado_status,
+            ditado::ditado_microfones,
+            ditado::ditado_capturar_atalho,
+            ditado::ditado_salvar_chave,
+            ditado::ditado_verificar_chave,
+            ditado::ditado_historico,
+            ditado::ditado_apagar,
+            ditado::ditado_copiar,
             prateleira::prateleira_info,
             prateleira::abrir_arquivo,
             prateleira::revelar_arquivo,

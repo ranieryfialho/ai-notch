@@ -14,6 +14,7 @@ Passe o mouse no notch para abrir. Ele tem:
 - **Minhas IAs**: uso do Claude Code e do Google Antigravity (janelas de 5h/7 dias, % e quando resetam), no mesmo modelo do módulo `ai-usage` do Status Monitor
 - **Avisos** que aparecem por alguns segundos: troca de música, bateria, Caps Lock, internet, limite das IAs, fim do pomodoro e hora de beber água
 - O **Faísca**, um mascote que passeia pelo notch quando não há música tocando e muda de humor (feliz com a meta de água, dormindo de madrugada, preocupado com a IA no limite)
+- **Ditado por voz** (o Open Whisper, agora dentro do notch): segure o atalho (Ctrl + Super; Ctrl + Option no Mac), fale e solte, e o texto é colado onde está o cursor, em qualquer app. Whisper offline no computador (o modelo é baixado no primeiro uso) ou na nuvem (OpenRouter, OpenAI, Groq), limpeza opcional com IA, histórico no notch. Se o Open Whisper já estiver configurado, as escolhas dele são trazidas. No Linux o atalho precisa do grupo `input` e a colagem do `ydotool`; no Mac, das permissões de Microfone e Acessibilidade
 - **Bateria dos periféricos sem fio** na barra, no estilo do BatteryHub, com página própria no notch, nomes, limite de aviso por aparelho e aviso de bateria baixa:
   - **Linux**: pelo UPower (mouse e teclado Logitech, DualSense/Xbox, Bluetooth em geral). Texto ao lado do ícone (`🎧 72%  🖱 71%`) no GNOME, XFCE e MATE; no KDE Plasma, um ícone por aparelho com a %
   - **macOS**: acessórios Bluetooth (Magic Mouse/Keyboard/Trackpad, AirPods), com o texto ao lado do ícone na barra de menus

@@ -7,7 +7,7 @@
 
 mod antigravity;
 mod claude;
-mod cofre;
+pub(crate) mod cofre;
 
 use std::path::PathBuf;
 use std::sync::Mutex;

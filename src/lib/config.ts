@@ -11,6 +11,7 @@ export const PAGINAS_NOTCH = [
   { id: 'tarefas', rotulo: 'Lista de Tarefas', descricao: 'Tarefas rápidas e as concluídas do dia.' },
   { id: 'ias', rotulo: 'Minhas IAs', descricao: 'Uso das suas contas de IA, conta por conta.' },
   { id: 'baterias', rotulo: 'Baterias', descricao: 'Carga do computador e dos periféricos sem fio.' },
+  { id: 'ditado', rotulo: 'Ditado', descricao: 'Os últimos textos ditados por voz, para copiar de novo.' },
 ] as const
 
 export type PaginaNotch = (typeof PAGINAS_NOTCH)[number]['id']
@@ -47,6 +48,40 @@ export type Config = {
     ocultos: string[]
     limites: Record<string, number>
   }
+  ditado: ConfigDitado
+}
+
+/** Ditado por voz (segure o atalho, fale, solte). Espelha `ConfigDitado` em src-tauri/src/ditado/config.rs. */
+export type ConfigDitado = {
+  ativo: boolean
+  provedor: 'local' | 'openrouter' | 'openai' | 'groq'
+  modelos: Record<string, string>
+  /** Códigos de tecla do libuiohook (os mesmos do Open Whisper). */
+  atalho: number[]
+  teclaMaosLivres: number
+  idioma: string
+  limpeza: boolean
+  restaurarAreaTransferencia: boolean
+  sons: boolean
+  /** Pausa a música enquanto grava e retoma ao parar de gravar. */
+  pausarMidia: boolean
+  microfone: string
+}
+
+const MAC = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+
+export const DITADO_PADRAO: ConfigDitado = {
+  ativo: true,
+  provedor: 'local',
+  modelos: { local: 'small', openrouter: 'google/gemini-2.5-flash', openai: 'gpt-4o-mini-transcribe', groq: 'whisper-large-v3-turbo' },
+  atalho: MAC ? [29, 56] : [29, 3675],
+  teclaMaosLivres: 57,
+  idioma: 'pt',
+  limpeza: false,
+  restaurarAreaTransferencia: true,
+  sons: true,
+  pausarMidia: true,
+  microfone: '',
 }
 
 export type OndePerifericos = 'bandeja' | 'pilula' | 'ambos' | 'nenhum'
@@ -55,7 +90,7 @@ export type OndePerifericos = 'bandeja' | 'pilula' | 'ambos' | 'nenhum'
 export const LIMITE_PADRAO = 15
 
 export const CONFIG_PADRAO: Config = {
-  paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true, baterias: true },
+  paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true, baterias: true, ditado: true },
   posicao: 'topo',
   notchMinimo: false,
   mascote: true,
@@ -65,6 +100,7 @@ export const CONFIG_PADRAO: Config = {
   agua: { ativo: true, metaMl: 2000, copoMl: 250, intervaloMin: 60, inicioHora: 8, fimHora: 22 },
   ia: { intervaloMin: 5, alertaPct: 80 },
   perifericos: { onde: 'bandeja', avisoBaixo: true, nomes: {}, ocultos: [], limites: {} },
+  ditado: DITADO_PADRAO,
 }
 
 const store = new LazyStore('config.json')
@@ -87,6 +123,7 @@ function mesclar(salva: Partial<Config> | undefined): Config {
       ...((c.perifericos as { barra?: boolean } | undefined)?.barra === false ? { onde: 'nenhum' as const } : {}),
       ...c.perifericos,
     },
+    ditado: { ...CONFIG_PADRAO.ditado, ...c.ditado, modelos: { ...CONFIG_PADRAO.ditado.modelos, ...c.ditado?.modelos } },
   }
 }
 
