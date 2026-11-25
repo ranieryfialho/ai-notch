@@ -40,10 +40,13 @@ panic = "abort"
 strip = true
 
 [target."cfg(windows)".dependencies]
-windows = { version = "0.58", features = ["Media_Control", "Foundation", "Foundation_Collections", "Storage_Streams", "Win32_UI_Input_KeyboardAndMouse"] }
+windows = { version = "0.58", features = ["Media_Control", "Foundation", "Foundation_Collections", "Storage_Streams", "Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Devices_DeviceAndDriverInstallation", "Win32_Devices_Properties", "Gaming_Input", "Devices_Power", "System_Power"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 mpris = "2"
+dbus = "0.9"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures-util = "0.3"
 gtk = "0.18"
 
 [target.'cfg(target_os = "macos")'.dependencies]

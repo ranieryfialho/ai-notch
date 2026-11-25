@@ -2,22 +2,37 @@ import { getVersion } from '@tauri-apps/api/app'
 import { emit, listen } from '@tauri-apps/api/event'
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { Bell, BookOpen, Check, Droplet, Info, Loader2, LogIn, Monitor, Plus, Sparkles, Timer, Trash2 } from 'lucide-react'
+import { BatteryMedium, Bell, BookOpen, Check, Download, Droplet, Info, Loader2, LogIn, Monitor, Plus, Sparkles, Timer, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, mensagemDeErro, type ContaIA, type JanelaUso, type ProvedorIA } from '../lib/api'
-import { PAGINAS_NOTCH, useConfig, type Config, type PaginaNotch, type Posicao } from '../lib/config'
+import { PAGINAS_NOTCH, useConfig, type Config, type OndePerifericos, type PaginaNotch, type Posicao } from '../lib/config'
+import {
+  comPreferencias,
+  corPeriferico,
+  descricaoBandeja,
+  FONTE_PERIFERICOS,
+  IconeTipo,
+  ROTULO_CONEXAO,
+  ROTULO_ESTADO,
+  ROTULO_TIPO,
+  useAmbiente,
+  usePerifericos,
+  type Periferico,
+} from '../lib/perifericos'
 import { corUso, duracaoCurta } from '../lib/formato'
 import { Mascote } from '../notch/Mascote'
+import { useModoBarra } from '../notch/useBarra'
 import { EVENTO_CONTAS_IA } from '../notch/useUsoIA'
 import { clienteIdCurto, ConfigurarClienteGoogle, useClienteGoogle } from './ClienteGoogle'
 import { ComoUsar, DicaEspiada } from './ComoUsar'
 
-type Secao = 'geral' | 'como-usar' | 'ias' | 'foco' | 'agua' | 'avisos' | 'sobre'
+type Secao = 'geral' | 'como-usar' | 'ias' | 'baterias' | 'foco' | 'agua' | 'avisos' | 'sobre'
 
 const SECOES: { id: Secao; rotulo: string; icone: ReactNode }[] = [
   { id: 'geral', rotulo: 'Geral', icone: <Monitor size={16} /> },
   { id: 'como-usar', rotulo: 'Como usar', icone: <BookOpen size={16} /> },
   { id: 'ias', rotulo: 'Minhas IAs', icone: <Sparkles size={16} /> },
+  { id: 'baterias', rotulo: 'Barra e baterias', icone: <BatteryMedium size={16} /> },
   { id: 'foco', rotulo: 'Foco', icone: <Timer size={16} /> },
   { id: 'agua', rotulo: 'Água', icone: <Droplet size={16} /> },
   { id: 'avisos', rotulo: 'Avisos', icone: <Bell size={16} /> },
@@ -65,6 +80,7 @@ export function Configuracoes() {
       <main className="flex-1 overflow-y-auto p-8">
         {secao === 'geral' && <Geral config={config} atualizar={atualizar} verGuia={() => setSecao('como-usar')} />}
         {secao === 'ias' && <MinhasIAs config={config} atualizar={atualizar} />}
+        {secao === 'baterias' && <BateriasCfg config={config} atualizar={atualizar} />}
         {secao === 'foco' && <FocoCfg config={config} atualizar={atualizar} />}
         {secao === 'agua' && <AguaCfg config={config} atualizar={atualizar} />}
         {secao === 'avisos' && <AvisosCfg config={config} atualizar={atualizar} />}
@@ -407,11 +423,11 @@ function NovaConta({ provedores, cancelar, salvo }: { provedores: ProvedorIA[]; 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-xs text-zinc-400">Nome da conta</span>
-            <input value={rotulo} onChange={(e) => setRotulo(e.target.value)} className="entrada" placeholder="Pessoal, Agência…" />
+            <input value={rotulo} onChange={(e) => setRotulo(e.target.value)} className="entrada w-full" placeholder="Pessoal, Agência…" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-zinc-400">Plano (US$/mês, opcional)</span>
-            <input value={plano} onChange={(e) => setPlano(e.target.value)} className="entrada" placeholder="100" inputMode="decimal" />
+            <input value={plano} onChange={(e) => setPlano(e.target.value)} className="entrada w-full" placeholder="100" inputMode="decimal" />
           </label>
         </div>
 
@@ -449,7 +465,7 @@ function NovaConta({ provedores, cancelar, salvo }: { provedores: ProvedorIA[]; 
               <input
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                className="entrada font-mono"
+                className="entrada w-full font-mono"
                 placeholder={provedor.exemploToken}
                 type="password"
                 autoComplete="off"
@@ -563,6 +579,171 @@ function AvisosCfg({ config, atualizar }: PropsSecao) {
   )
 }
 
+// ---- Barra e baterias -----------------------------------------------------
+
+const ONDE: { id: OndePerifericos; rotulo: string }[] = [
+  { id: 'bandeja', rotulo: 'Bandeja' },
+  { id: 'pilula', rotulo: 'Pílula' },
+  { id: 'ambos', rotulo: 'Os dois' },
+  { id: 'nenhum', rotulo: 'Nenhum' },
+]
+
+const LIMITES: [number, string][] = [50, 40, 30, 20, 15, 10, 5].map((v) => [v, `Avisar em ${v}%`])
+
+function BateriasCfg({ config, atualizar }: PropsSecao) {
+  const lista = comPreferencias(usePerifericos(), config.perifericos)
+  const ambiente = useAmbiente()
+  const gnome = !!ambiente?.gnome
+  const p = config.perifericos
+  // Fora do GNOME não há pílula: só bandeja ou nada (e "Pílula" vinda de outro PC vale como bandeja).
+  const opcoesOnde = gnome ? ONDE : ONDE.filter((o) => o.id === 'bandeja' || o.id === 'nenhum')
+  const onde = !gnome && (p.onde === 'pilula' || p.onde === 'ambos') ? 'bandeja' : p.onde
+  const mudar = (parcial: Partial<Config['perifericos']>) => atualizar((c) => ({ ...c, perifericos: { ...c.perifericos, ...parcial } }))
+
+  return (
+    <Pagina titulo="Barra e baterias" descricao="O AI Notch na barra do sistema e a carga dos seus periféricos sem fio.">
+      {gnome && <CartaoExtensaoGnome />}
+
+      <div className={gnome ? 'mt-8' : ''}>
+        <h2 className="text-sm font-semibold text-white">Periféricos</h2>
+        <p className="mt-0.5 mb-3 text-xs text-zinc-500">Mouse, teclado, headset e controle sem fio. {ambiente ? FONTE_PERIFERICOS[ambiente.so] : ''}</p>
+        <Cartao>
+          <Linha rotulo="Onde mostrar na barra" descricao={ambiente ? descricaoBandeja(ambiente) : undefined}>
+            <Segmentado valor={onde} opcoes={opcoesOnde} onChange={(novo) => mudar({ onde: novo })} />
+          </Linha>
+          <Interruptor
+            rotulo="Avisar com bateria baixa"
+            descricao="Um aviso no notch quando um periférico fora da tomada chega no limite escolhido para ele."
+            valor={p.avisoBaixo}
+            onChange={(avisoBaixo) => mudar({ avisoBaixo })}
+          />
+        </Cartao>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-white">Dispositivos</h2>
+        <p className="mt-0.5 mb-3 text-xs text-zinc-500">O nome vale só dentro do AI Notch. Desligado, o aparelho sai da barra mas continua no menu e na página Baterias.</p>
+        <Cartao>
+          {lista.length === 0 ? (
+            <p className="py-4 text-sm text-zinc-500">
+              Nenhum periférico com bateria conectado agora.
+              {ambiente?.so === 'windows' && ' Mouse e teclado em receptor USB próprio ainda não aparecem no Windows.'}
+            </p>
+          ) : (
+            lista.map((d) => <LinhaDispositivo key={d.id} d={d} prefs={p} mudar={mudar} />)
+          )}
+        </Cartao>
+      </div>
+    </Pagina>
+  )
+}
+
+function LinhaDispositivo({
+  d,
+  prefs,
+  mudar,
+}: {
+  d: Periferico
+  prefs: Config['perifericos']
+  mudar: (parcial: Partial<Config['perifericos']>) => void
+}) {
+  const [nome, setNome] = useState(prefs.nomes[d.id] ?? '')
+  // Salva ao sair do campo (não a cada tecla, que redesenharia a bandeja).
+  const salvarNome = () => {
+    const limpo = nome.trim()
+    if (limpo === (prefs.nomes[d.id] ?? '')) return
+    const nomes = { ...prefs.nomes }
+    if (limpo) nomes[d.id] = limpo
+    else delete nomes[d.id]
+    mudar({ nomes })
+  }
+  const detalhes = [ROTULO_TIPO[d.tipo], ROTULO_CONEXAO[d.conexao], ROTULO_ESTADO[d.estado]].filter(Boolean).join(' · ')
+
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-zinc-800 text-zinc-300">
+        <IconeTipo tipo={d.tipo} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <input
+          value={nome}
+          placeholder={d.nomeOriginal}
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={salvarNome}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          title="Renomear (só no AI Notch)"
+          className="entrada w-full"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          <span className="font-semibold tabular-nums" style={{ color: corPeriferico(d) }}>
+            {d.percentual}%
+          </span>{' '}
+          · {detalhes}
+        </p>
+      </div>
+      <Seletor className="w-36" valor={d.limite} opcoes={LIMITES} onChange={(v) => mudar({ limites: { ...prefs.limites, [d.id]: v } })} />
+      <Chave
+        valor={d.naBarra}
+        titulo="Mostrar na barra"
+        onChange={(v) => mudar({ ocultos: v ? prefs.ocultos.filter((id) => id !== d.id) : [...prefs.ocultos, d.id] })}
+      />
+    </div>
+  )
+}
+
+/** Status da pílula no painel do GNOME e instalação da extensão. */
+function CartaoExtensaoGnome() {
+  const conectada = useModoBarra()
+  const [mensagem, setMensagem] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+
+  const instalar = async () => {
+    setOcupado(true)
+    try {
+      setMensagem(await api.instalarExtensaoGnome())
+    } catch (e) {
+      setMensagem(mensagemDeErro(e))
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-sm font-semibold text-white">Barra do GNOME</h2>
+      <p className="mt-0.5 mb-3 text-xs text-zinc-500">
+        A extensão coloca o notch no painel superior, no lugar do relógio: passe o mouse para abrir o notch, clique para o calendário.
+      </p>
+      <Cartao>
+        <Linha
+          rotulo="Pílula no painel"
+          descricao={
+            conectada
+              ? 'Conectada. O notch recolhido fica escondido enquanto a pílula estiver no painel.'
+              : 'Não conectada. Instale a extensão (ou atualize, depois de uma nova versão do app).'
+          }
+        >
+          {conectada ? (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs text-green-300">
+              <Check size={12} /> Conectada
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void instalar()}
+            disabled={ocupado}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:opacity-50"
+          >
+            {ocupado ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            {conectada ? 'Reinstalar' : 'Instalar extensão'}
+          </button>
+        </Linha>
+        {mensagem && <p className="py-3 text-xs text-zinc-400">{mensagem}</p>}
+      </Cartao>
+    </div>
+  )
+}
+
 function Sobre() {
   // Vem do tauri.conf.json: não precisa lembrar de atualizar aqui a cada versão.
   const [versao, setVersao] = useState('')
@@ -627,16 +808,42 @@ const Campo = Linha
 function Interruptor({ rotulo, descricao, valor, onChange }: { rotulo: string; descricao?: string; valor: boolean; onChange: (v: boolean) => void }) {
   return (
     <Linha rotulo={rotulo} descricao={descricao}>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={valor}
-        onClick={() => onChange(!valor)}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition ${valor ? 'bg-violet-500' : 'bg-zinc-700'}`}
-      >
-        <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${valor ? 'left-[22px]' : 'left-0.5'}`} />
-      </button>
+      <Chave valor={valor} onChange={onChange} />
     </Linha>
+  )
+}
+
+function Chave({ valor, onChange, titulo }: { valor: boolean; onChange: (v: boolean) => void; titulo?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={valor}
+      title={titulo}
+      onClick={() => onChange(!valor)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition ${valor ? 'bg-violet-500' : 'bg-zinc-700'}`}
+    >
+      <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${valor ? 'left-[22px]' : 'left-0.5'}`} />
+    </button>
+  )
+}
+
+function Segmentado<T extends string>({ valor, opcoes, onChange }: { valor: T; opcoes: { id: T; rotulo: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div role="radiogroup" className="flex shrink-0 rounded-lg border border-white/10 bg-zinc-950 p-0.5">
+      {opcoes.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={valor === o.id}
+          onClick={() => onChange(o.id)}
+          className={`rounded-md px-2.5 py-1 text-xs transition ${valor === o.id ? 'bg-violet-500 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+        >
+          {o.rotulo}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -648,22 +855,7 @@ const POSICOES: { id: Posicao; rotulo: string }[] = [
 ]
 
 function SeletorPosicao({ valor, onChange }: { valor: Posicao; onChange: (v: Posicao) => void }) {
-  return (
-    <div role="radiogroup" className="flex shrink-0 rounded-lg border border-white/10 bg-zinc-950 p-0.5">
-      {POSICOES.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          role="radio"
-          aria-checked={valor === p.id}
-          onClick={() => onChange(p.id)}
-          className={`rounded-md px-2.5 py-1 text-xs transition ${valor === p.id ? 'bg-violet-500 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-        >
-          {p.rotulo}
-        </button>
-      ))}
-    </div>
-  )
+  return <Segmentado valor={valor} opcoes={POSICOES} onChange={onChange} />
 }
 
 function Numero({ valor, min, max, sufixo, onChange }: { valor: number; min: number; max: number; sufixo: string; onChange: (v: number) => void }) {
@@ -685,9 +877,9 @@ function Numero({ valor, min, max, sufixo, onChange }: { valor: number; min: num
   )
 }
 
-function Seletor({ valor, opcoes, onChange }: { valor: number; opcoes: [number, string][]; onChange: (v: number) => void }) {
+function Seletor({ valor, opcoes, onChange, className = 'w-32' }: { valor: number; opcoes: [number, string][]; onChange: (v: number) => void; className?: string }) {
   return (
-    <select value={valor} onChange={(e) => onChange(Number(e.target.value))} className="entrada w-32">
+    <select value={valor} onChange={(e) => onChange(Number(e.target.value))} className={`entrada shrink-0 ${className}`}>
       {opcoes.map(([v, r]) => (
         <option key={v} value={v}>
           {r}

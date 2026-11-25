@@ -1,13 +1,16 @@
+mod ambiente;
+mod bandeja;
+mod barra;
 mod ia;
+mod icone_pct;
 mod letras;
 mod midia;
 mod notch;
+mod perifericos;
 mod prateleira;
 mod sistema;
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::Manager;
 
 /// Tamanho inicial (notch recolhido); depois o front controla via `definir_tamanho_notch`.
 const LARGURA_INICIAL: f64 = 230.0;
@@ -37,7 +40,9 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             notch::elevar_acima_da_barra_de_menus(&janela);
 
-            criar_bandeja(app.handle())?;
+            bandeja::criar(app.handle())?;
+            perifericos::monitorar(app.handle().clone());
+            barra::iniciar(app.handle().clone());
             sistema::monitorar_bateria(app.handle().clone());
             sistema::monitorar_caps_lock(app.handle().clone());
             Ok(())
@@ -50,6 +55,11 @@ pub fn run() {
             midia::midia_comando,
             letras::buscar_letra,
             sistema::bateria_atual,
+            perifericos::perifericos_atuais,
+            barra::publicar_barra,
+            barra::modo_barra,
+            barra::instalar_extensao_gnome,
+            ambiente::ambiente,
             prateleira::prateleira_info,
             prateleira::abrir_arquivo,
             prateleira::revelar_arquivo,
@@ -67,42 +77,6 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o AI Notch");
-}
-
-fn criar_bandeja(app: &AppHandle) -> tauri::Result<()> {
-    let configuracoes = MenuItem::with_id(app, "configuracoes", "Configurações…", true, None::<&str>)?;
-    let ias = MenuItem::with_id(app, "ias", "Minhas IAs…", true, None::<&str>)?;
-    let alternar = MenuItem::with_id(app, "alternar", "Mostrar/ocultar notch", true, None::<&str>)?;
-    let sobre = MenuItem::with_id(app, "sobre", "Sobre o AI Notch", true, None::<&str>)?;
-    let sair = MenuItem::with_id(app, "sair", "Sair", true, None::<&str>)?;
-    let separador = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&configuracoes, &ias, &alternar, &separador, &sobre, &sair])?;
-
-    TrayIconBuilder::with_id("bandeja")
-        .icon(app.default_window_icon().cloned().expect("ícone padrão"))
-        .tooltip("AI Notch")
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, evento| {
-            let _ = match evento.id.as_ref() {
-                "configuracoes" => notch::abrir_janela_configuracoes(app, None),
-                "ias" => notch::abrir_janela_configuracoes(app, Some("ias".into())),
-                "sobre" => notch::abrir_janela_configuracoes(app, Some("sobre".into())),
-                "alternar" => notch::alternar_visibilidade(app),
-                "sair" => {
-                    app.exit(0);
-                    Ok(())
-                }
-                _ => Ok(()),
-            };
-        })
-        .on_tray_icon_event(|bandeja, evento| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = evento {
-                let _ = notch::abrir_janela_configuracoes(bandeja.app_handle(), None);
-            }
-        })
-        .build(app)?;
-    Ok(())
 }
 
 /// No Wayland não dá para posicionar janelas nem mantê-las sempre no topo

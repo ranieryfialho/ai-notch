@@ -1,0 +1,55 @@
+/* A pílula preta do AI Notch no lugar do relógio do painel. */
+.ai-notch-pilula {
+  background-color: #000;
+  color: #fff;
+  border-radius: 99px;
+  padding: 2px 10px;
+  spacing: 8px;
+  margin: 2px 0;
+  transition-duration: 180ms;
+}
+
+.ai-notch-pilula:hover {
+  background-color: #111113;
+}
+
+.ai-notch-hora,
+.ai-notch-foco,
+.ai-notch-ia {
+  font-weight: bold;
+  font-feature-settings: "tnum";
+}
+
+.ai-notch-ia,
+.ai-notch-aviso {
+  font-size: 0.92em;
+}
+
+.ai-notch-capa {
+  border-radius: 4px;
+}
+
+.ai-notch-equalizador {
+  spacing: 2px;
+  height: 12px;
+}
+
+.ai-notch-barra {
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.ai-notch-perifericos {
+  spacing: 8px;
+}
+
+.ai-notch-periferico {
+  spacing: 3px;
+}
+
+.ai-notch-periferico-pct {
+  font-size: 0.92em;
+  font-weight: bold;
+  font-feature-settings: "tnum";
+}

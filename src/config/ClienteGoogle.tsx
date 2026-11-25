@@ -83,7 +83,7 @@ export function ConfigurarClienteGoogle({ aoSalvar, cancelar }: { aoSalvar: () =
           <input
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            className="entrada font-mono text-xs"
+            className="entrada w-full font-mono text-xs"
             placeholder="123456789-abc.apps.googleusercontent.com"
             spellCheck={false}
             autoComplete="off"
@@ -94,7 +94,7 @@ export function ConfigurarClienteGoogle({ aoSalvar, cancelar }: { aoSalvar: () =
           <input
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
-            className="entrada font-mono text-xs"
+            className="entrada w-full font-mono text-xs"
             placeholder="GOCSPX-..."
             type="password"
             spellCheck={false}

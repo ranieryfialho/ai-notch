@@ -116,19 +116,21 @@ body.janela-config {
   border-top-right-radius: 40% 8px;
 }
 
-.entrada {
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(9 9 11);
-  padding: 0.45rem 0.75rem;
-  font-size: 0.875rem;
-  color: white;
-  outline: none;
-}
+/* Sem largura aqui: cada campo diz a sua (w-full, w-32...), sem disputa de cascata. */
+@layer components {
+  .entrada {
+    border-radius: 0.5rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(9 9 11);
+    padding: 0.45rem 0.75rem;
+    font-size: 0.875rem;
+    color: white;
+    outline: none;
+  }
 
-.entrada:focus {
-  border-color: rgb(167 139 250);
+  .entrada:focus {
+    border-color: rgb(167 139 250);
+  }
 }
 
 ::-webkit-scrollbar {

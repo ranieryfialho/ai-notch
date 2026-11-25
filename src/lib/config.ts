@@ -10,6 +10,7 @@ export const PAGINAS_NOTCH = [
   { id: 'prateleira', rotulo: 'Prateleira', descricao: 'Arraste arquivos para o notch e depois para fora.' },
   { id: 'tarefas', rotulo: 'Lista de Tarefas', descricao: 'Tarefas rápidas e as concluídas do dia.' },
   { id: 'ias', rotulo: 'Minhas IAs', descricao: 'Uso das suas contas de IA, conta por conta.' },
+  { id: 'baterias', rotulo: 'Baterias', descricao: 'Carga do computador e dos periféricos sem fio.' },
 ] as const
 
 export type PaginaNotch = (typeof PAGINAS_NOTCH)[number]['id']
@@ -35,10 +36,26 @@ export type Config = {
   foco: { focoMin: number; pausaCurtaMin: number; pausaLongaMin: number; ciclosAtePausaLonga: number }
   agua: { ativo: boolean; metaMl: number; copoMl: number; intervaloMin: number; inicioHora: number; fimHora: number }
   ia: { intervaloMin: number; alertaPct: number }
+  /** Bateria de mouse, teclado, headset e controle sem fio. */
+  perifericos: {
+    /** Onde a carga aparece na barra: ao lado do ícone na bandeja, dentro da pílula (extensão do GNOME), nos dois ou em nenhum. */
+    onde: OndePerifericos
+    /** Aviso no notch quando um periférico fora da tomada chega no limite dele. */
+    avisoBaixo: boolean
+    /** Por id do dispositivo: nome dado pelo usuário, fora da barra e limite de aviso (%). */
+    nomes: Record<string, string>
+    ocultos: string[]
+    limites: Record<string, number>
+  }
 }
 
+export type OndePerifericos = 'bandeja' | 'pilula' | 'ambos' | 'nenhum'
+
+/** Limite de aviso de um periférico quando o usuário não escolheu outro. */
+export const LIMITE_PADRAO = 15
+
 export const CONFIG_PADRAO: Config = {
-  paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true },
+  paginas: { musica: true, foco: true, agua: true, prateleira: true, tarefas: true, ias: true, baterias: true },
   posicao: 'topo',
   notchMinimo: false,
   mascote: true,
@@ -47,6 +64,7 @@ export const CONFIG_PADRAO: Config = {
   foco: { focoMin: 25, pausaCurtaMin: 5, pausaLongaMin: 15, ciclosAtePausaLonga: 4 },
   agua: { ativo: true, metaMl: 2000, copoMl: 250, intervaloMin: 60, inicioHora: 8, fimHora: 22 },
   ia: { intervaloMin: 5, alertaPct: 80 },
+  perifericos: { onde: 'bandeja', avisoBaixo: true, nomes: {}, ocultos: [], limites: {} },
 }
 
 const store = new LazyStore('config.json')
@@ -63,6 +81,12 @@ function mesclar(salva: Partial<Config> | undefined): Config {
     foco: { ...CONFIG_PADRAO.foco, ...c.foco },
     agua: { ...CONFIG_PADRAO.agua, ...c.agua },
     ia: { ...CONFIG_PADRAO.ia, ...c.ia },
+    perifericos: {
+      ...CONFIG_PADRAO.perifericos,
+      // A v0.1.2 só tinha `barra: boolean`; desligado vira "nenhum".
+      ...((c.perifericos as { barra?: boolean } | undefined)?.barra === false ? { onde: 'nenhum' as const } : {}),
+      ...c.perifericos,
+    },
   }
 }
 

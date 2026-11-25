@@ -29,3 +29,6 @@ src-tauri/gen
 
 # Credenciais locais (Antigravity)
 src-tauri/.segredos.env
+
+# Instaladores de referência (BatteryHub etc.), só para estudo local
+ref/

@@ -16,6 +16,19 @@ export type Letra = { sincronizada: string | null; simples: string | null }
 
 export type Bateria = { percentual: number; conectada: boolean; cheia: boolean }
 
+/** Periférico sem fio com bateria (mouse, teclado, headset, controle...). */
+export type Dispositivo = {
+  id: string
+  nome: string
+  tipo: 'headset' | 'fones' | 'mouse' | 'teclado' | 'controle' | 'caneta' | 'outro'
+  percentual: number
+  estado: 'descarregando' | 'carregando' | 'cheia' | 'desconhecido'
+  conexao: 'bluetooth' | 'receptor' | 'desconhecida'
+}
+
+/** Sistema e painel, para as telas mostrarem só o que funciona ali. */
+export type Ambiente = { so: 'linux' | 'windows' | 'macos'; gnome: boolean; rotuloNaBandeja: boolean }
+
 export type JanelaUso = { rotulo: string; utilizacao: number | null; resetaEm: number | null }
 
 export type ProvedorIA = {
@@ -42,6 +55,12 @@ export const api = {
     invoke<Letra | null>('buscar_letra', { artista: m.artista, titulo: m.titulo, album: m.album, duracaoSeg: m.duracaoMs / 1000 }),
 
   bateriaAtual: () => invoke<Bateria | null>('bateria_atual'),
+  perifericosAtuais: () => invoke<Dispositivo[]>('perifericos_atuais'),
+
+  publicarBarra: (resumo: string) => invoke<void>('publicar_barra', { resumo }),
+  modoBarra: () => invoke<boolean>('modo_barra'),
+  instalarExtensaoGnome: () => invoke<string>('instalar_extensao_gnome'),
+  ambiente: () => invoke<Ambiente>('ambiente'),
 
   prateleiraInfo: (caminhos: string[]) => invoke<InfoArquivo[]>('prateleira_info', { caminhos }),
   abrirArquivo: (caminho: string) => invoke<void>('abrir_arquivo', { caminho }),

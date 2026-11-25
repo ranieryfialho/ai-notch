@@ -5,8 +5,10 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
 import { usePersistido, useConfig, type PaginaNotch } from '../lib/config'
+import { comPreferencias, corPeriferico, usePerifericos } from '../lib/perifericos'
 import { corUso, duracaoCompacta, mmss } from '../lib/formato'
 import { Agua } from './abas/Agua'
+import { Baterias } from './abas/Baterias'
 import { COR_MODO, Foco } from './abas/Foco'
 import { IAs } from './abas/IAs'
 import { Musica } from './abas/Musica'
@@ -15,8 +17,9 @@ import { Tarefas } from './abas/Tarefas'
 import { notificarSistema, useAvisos, type Aviso, type IconeAviso } from './avisos'
 import { MascoteFiruleiro, type Humor } from './Mascote'
 import { ALINHAMENTO, cantos, daBorda, ehVertical, orelhas } from './posicao'
-import { AnelBateria, dataCurta, desfoque, horaCurta, MOLA, Pontos, SetaNav, Titulo } from './ui'
+import { AnelBateria, corBateria, dataCurta, desfoque, horaCurta, MOLA, Pontos, SetaNav, Titulo } from './ui'
 import { useAgua } from './useAgua'
+import { usePublicarBarra, useModoBarra } from './useBarra'
 import { NA_TOMADA, useBateria } from './useBateria'
 import { useJanelaNotch } from './useJanelaNotch'
 import { posicaoAgora, useMidia, useTique } from './useMidia'
@@ -32,6 +35,7 @@ const PAGINAS: { id: Pagina; titulo: [string, string?, string?] }[] = [
   { id: 'prateleira', titulo: ['Prateleira'] },
   { id: 'tarefas', titulo: ['Lista de ', 'Tarefas', '#4ade80'] },
   { id: 'ias', titulo: ['Minhas ', 'IAs', '#a78bfa'] },
+  { id: 'baterias', titulo: ['Baterias'] },
 ]
 
 const TAMANHO = {
@@ -49,6 +53,9 @@ const espiadaTamanho = (contas: number) => ({ l: 470, a: 14 + Math.min(4, Math.m
 
 /** Tamanho (px) da ponta do notch recolhido (direita, ou de baixo nas laterais) que abre a espiada das IAs. */
 const ZONA_ESPIADA = 56
+
+/** Aberto pela pílula da barra: fecha sozinho se o mouse não descer até o notch. */
+const ESPERA_BARRA = 1200
 
 /** Curva côncava onde o notch encontra a borda da tela, como se escorresse dela. */
 const ORELHA = 10
@@ -141,6 +148,25 @@ export function Notch() {
     }
   })
 
+  const perifericos = comPreferencias(usePerifericos(), config.perifericos)
+
+  // Periférico fora da tomada cruzou o limite dele: um aviso só, até carregar de novo.
+  const cargaAnterior = useRef(new Map<string, number>())
+  const chavePerifericos = perifericos.map((p) => `${p.id}:${p.percentual}:${p.estado}:${p.limite}`).join('|')
+  useEffect(() => {
+    for (const p of perifericos) {
+      const antes = cargaAnterior.current.get(p.id)
+      cargaAnterior.current.set(p.id, p.percentual)
+      const carregando = p.estado === 'carregando' || p.estado === 'cheia'
+      if (antes === undefined || carregando || !config.perifericos.avisoBaixo) continue
+      if (antes > p.limite && p.percentual <= p.limite) {
+        const titulo = `${p.nome}: ${p.percentual}%`
+        avisar({ icone: 'bateria-baixa', titulo, texto: 'Bateria do periférico baixa', cor: '#f87171', duracaoMs: 6000 })
+        if (config.avisos.notificacaoDoSistema) void notificarSistema(`🔋 ${titulo}`, 'Bateria do periférico baixa')
+      }
+    }
+  }, [chavePerifericos])
+
   const [prateleira, setPrateleira] = usePersistido<string[]>('prateleira', [])
 
   // ---- Avisos do sistema ---------------------------------------------------
@@ -230,6 +256,28 @@ export function Notch() {
     const parar = listen('mouse-saiu', () => sair())
     return () => void parar.then((f) => f())
   }, [])
+
+  // ---- Pílula na barra do GNOME ---------------------------------------------
+  // Com a extensão conectada, o notch recolhido some e quem abre é o hover na
+  // pílula do painel; o notch desce logo abaixo dela.
+  const modoBarra = useModoBarra()
+  useEffect(() => {
+    const abrir = listen('barra-abrir', () => {
+      setEspiada(false)
+      setAberto(true)
+      // Entrar no notch (onMouseEnter) cancela este fechamento.
+      agendar(() => setAberto(false), ESPERA_BARRA)
+    })
+    const fechar = listen('barra-fechar', () => {
+      clearTimeout(timerHover.current)
+      setAberto(false)
+      setEspiada(false)
+    })
+    return () => {
+      void abrir.then((f) => f())
+      void fechar.then((f) => f())
+    }
+  }, [])
   const clicar = () => {
     if (aberto) return
     // Clicar na espiada abre o notch direto na página das IAs (se estiver ligada).
@@ -286,8 +334,28 @@ export function Notch() {
   ) : null
 
   const modo: 'aberto' | 'espiada' | 'aviso' | 'recolhido' = aberto ? 'aberto' : espiada ? 'espiada' : aviso ? 'aviso' : 'recolhido'
-  const tamanho =
-    modo === 'aberto'
+
+  usePublicarBarra({
+    musica: midia
+      ? { titulo: midia.titulo, artista: midia.artista, tocando: midia.tocando, capa: midia.capa?.startsWith('http') ? midia.capa : null }
+      : null,
+    bateria: bateria ? { percentual: bateria.percentual, conectada: bateria.conectada, cor: corBateria(bateria) } : null,
+    foco: pomodoro.rodando ? { fimEm: pomodoro.fimEm, cor: COR_MODO[pomodoro.modo][0] } : null,
+    ia: pior ? { pct: Math.round(pior.pct * 100), cor: corUso(pior.pct) } : null,
+    aviso: aviso ? { id: aviso.id, titulo: aviso.titulo, texto: aviso.texto ?? null, cor: aviso.cor ?? null } : null,
+    perifericos:
+      config.perifericos.onde === 'pilula' || config.perifericos.onde === 'ambos'
+        ? perifericos
+            .filter((p) => p.naBarra)
+            .map((p) => ({ tipo: p.tipo, pct: p.percentual, cor: corPeriferico(p), carregando: p.estado === 'carregando' }))
+        : null,
+  })
+
+  // No modo barra, recolhido e avisos ficam na pílula do painel: aqui, nada.
+  const escondido = modoBarra && (modo === 'recolhido' || modo === 'aviso')
+  const tamanho = escondido
+    ? { l: 0, a: 0 }
+    : modo === 'aberto'
       ? TAMANHO.aberto
       : modo === 'espiada'
         ? espiadaTamanho(usos.length)
@@ -301,7 +369,8 @@ export function Notch() {
               ? TAMANHO.recolhidoVertical
               : TAMANHO.recolhido
   // As orelhas ficam nas pontas ao longo da borda: dos lados no topo/base, em cima e embaixo nas laterais.
-  useJanelaNotch(tamanho.l + (vertical ? 0 : ORELHA * 2), tamanho.a + (vertical ? ORELHA * 2 : 0), borda)
+  const orelha = escondido ? 0 : ORELHA
+  useJanelaNotch(tamanho.l + (vertical ? 0 : orelha * 2), tamanho.a + (vertical ? orelha * 2 : 0), borda)
   const fino = Math.min(tamanho.l, tamanho.a) <= 8
   const raio = modo === 'aberto' ? 32 : modo === 'aviso' || modo === 'espiada' ? 22 : fino ? 6 : 14
   const [orelha1, orelha2] = orelhas(borda, ORELHA)
@@ -319,8 +388,8 @@ export function Notch() {
         onWheel={rolar}
         onClick={clicar}
       >
-        <span className="orelha" style={orelha1} />
-        <span className="orelha" style={orelha2} />
+        {!escondido && <span className="orelha" style={orelha1} />}
+        {!escondido && <span className="orelha" style={orelha2} />}
         <motion.div
           className="absolute inset-0 overflow-hidden bg-black text-white"
           initial={false}
@@ -328,7 +397,7 @@ export function Notch() {
           transition={MOLA}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            {modo === 'recolhido' && !fino && (
+            {modo === 'recolhido' && !fino && !escondido && (
               <motion.div
                 key="recolhido"
                 initial={{ opacity: 0, scale: 0.8, ...desfoque(4) }}
@@ -362,7 +431,7 @@ export function Notch() {
               </motion.div>
             )}
 
-            {modo === 'aviso' && aviso && (
+            {modo === 'aviso' && aviso && !escondido && (
               <motion.div
                 key={`aviso-${aviso.id}`}
                 initial={{ opacity: 0, ...daBorda(borda, 8), ...desfoque(6) }}
@@ -440,6 +509,7 @@ export function Notch() {
                       )}
                       {pagina.id === 'tarefas' && <Tarefas />}
                       {pagina.id === 'ias' && <IAs usos={usos} recarregar={() => void recarregar()} />}
+                      {pagina.id === 'baterias' && <Baterias bateria={bateria} perifericos={perifericos} />}
                     </motion.div>
                   </AnimatePresence>
                 </main>

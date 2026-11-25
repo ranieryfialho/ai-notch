@@ -14,3 +14,17 @@ Passe o mouse no notch para abrir. Ele tem:
 - **Minhas IAs**: uso do Claude Code e do Google Antigravity (janelas de 5h/7 dias, % e quando resetam), no mesmo modelo do módulo `ai-usage` do Status Monitor
 - **Avisos** que aparecem por alguns segundos: troca de música, bateria, Caps Lock, internet, limite das IAs, fim do pomodoro e hora de beber água
 - O **Faísca**, um mascote que passeia pelo notch quando não há música tocando e muda de humor (feliz com a meta de água, dormindo de madrugada, preocupado com a IA no limite)
+- **Bateria dos periféricos sem fio** na barra, no estilo do BatteryHub, com página própria no notch, nomes, limite de aviso por aparelho e aviso de bateria baixa:
+  - **Linux**: pelo UPower (mouse e teclado Logitech, DualSense/Xbox, Bluetooth em geral). Texto ao lado do ícone (`🎧 72%  🖱 71%`) no GNOME, XFCE e MATE; no KDE Plasma, um ícone por aparelho com a %
+  - **macOS**: acessórios Bluetooth (Magic Mouse/Keyboard/Trackpad, AirPods), com o texto ao lado do ícone na barra de menus
+  - **Windows**: aparelhos Bluetooth e controles Xbox, um ícone por aparelho na área de notificação com a % desenhada. Receptores USB próprios (Logitech, headsets 2,4 GHz) ainda não
+
+## Na barra do GNOME (Linux)
+
+Com a extensão **AI Notch na barra**, o notch vira uma pílula no painel superior, no lugar do relógio, com música, bateria, pomodoro, uso das IAs e avisos. Passe o mouse na pílula para o notch completo descer logo abaixo dela; clique para abrir o calendário do GNOME, como antes. Sem o app aberto, o relógio normal volta.
+
+```bash
+./extras/gnome-shell-extension/instalar.sh
+```
+
+No Wayland, saia e entre de novo na sessão e ative com `gnome-extensions enable ai-notch@ranieryfialho.github.io` (ou pelo app Extensões).

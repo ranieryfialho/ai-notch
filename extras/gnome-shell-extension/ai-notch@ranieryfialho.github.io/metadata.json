@@ -1,0 +1,7 @@
+{
+  "uuid": "ai-notch@ranieryfialho.github.io",
+  "name": "AI Notch na barra",
+  "description": "Coloca o AI Notch no painel superior, no lugar do relógio: música, bateria, pomodoro, uso das IAs e avisos numa pílula. Passe o mouse para abrir o notch completo; clique para o calendário. Precisa do app AI Notch aberto.",
+  "shell-version": ["46", "47", "48", "49", "50", "51"],
+  "url": "https://github.com/ranieryfialho/ai-notch"
+}
