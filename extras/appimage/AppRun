@@ -1,0 +1,49 @@
+#!/bin/sh
+# AI Notch: usa o WebKitGTK e o GTK do sistema quando existem; senão, os embutidos.
+# AINOTCH_LIBS=sistema|embutidas força a escolha; AINOTCH_DIAGNOSTICO=1 só a mostra.
+aqui="$(dirname "$(readlink -f "$0")")"
+binario="$aqui/usr/sistema/bin/ai-notch"
+
+sistema_atende() {
+    saida="$(ldd "$binario" 2>/dev/null)" || return 1
+    case "$saida" in *"not found"*) return 1 ;; esac
+    # A biblioteca do ícone da bandeja é carregada em tempo de execução.
+    for pasta in /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib; do
+        for lib in libayatana-appindicator3.so.1 libappindicator3.so.1; do
+            [ -e "$pasta/$lib" ] && return 0
+        done
+    done
+    return 1
+}
+
+so_nvidia() {
+    achou=1
+    for arquivo in /sys/class/drm/card[0-9]/device/vendor /sys/class/drm/card[0-9][0-9]/device/vendor; do
+        [ -r "$arquivo" ] || continue
+        [ "$(cat "$arquivo")" = "0x10de" ] || return 1
+        achou=0
+    done
+    return $achou
+}
+
+escolha="$AINOTCH_LIBS"
+if [ -z "$escolha" ]; then
+    if sistema_atende; then escolha=sistema; else escolha=embutidas; fi
+fi
+
+if [ "$escolha" = sistema ] && so_nvidia; then
+    export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-0}"
+    export WEBKIT_DMABUF_RENDERER_FORCE_SHM="${WEBKIT_DMABUF_RENDERER_FORCE_SHM:-1}"
+    export WEBKIT_FORCE_VBLANK_TIMER="${WEBKIT_FORCE_VBLANK_TIMER:-1}"
+fi
+
+if [ -n "$AINOTCH_DIAGNOSTICO" ]; then
+    echo "bibliotecas: $escolha"
+    env | grep -E '^WEBKIT_' | sort
+    exit 0
+fi
+
+if [ "$escolha" = sistema ]; then
+    exec "$binario" "$@"
+fi
+exec "$aqui/AppRun.embutido" "$@"
